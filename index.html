@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Treino ao Vivo — Prova de Conceito (FC + Watts)</title>
+<style>
+  :root { --bg:#0e1116; --card:#171c24; --bord:#262d38; --hr:#ff5a5f; --pw:#ffb02e; --cad:#37c2c4; --txt:#e9eef5; --mut:#8a95a5; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:16px; }
+  h1 { font-size:18px; font-weight:700; margin:4px 0 4px; }
+  .sub { color:var(--mut); font-size:13px; margin-bottom:16px; }
+  .cards { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
+  @media (max-width:560px){ .cards{ grid-template-columns:1fr; } }
+  .card { background:var(--card); border:1px solid var(--bord); border-radius:18px; padding:18px 16px; text-align:center; }
+  .card .label { font-size:14px; color:var(--mut); font-weight:600; }
+  .card .val { font-size:64px; font-weight:800; line-height:1.05; margin:6px 0; font-variant-numeric:tabular-nums; }
+  .card .unit { font-size:13px; color:var(--mut); }
+  .card.hr .val{ color:var(--hr);} .card.pw .val{ color:var(--pw);} .card.cad .val{ color:var(--cad);}
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#444; margin-left:6px; vertical-align:middle; }
+  .dot.on { background:#37d67a; box-shadow:0 0 8px #37d67a; }
+  .buttons { display:flex; gap:12px; margin:18px 0; flex-wrap:wrap; }
+  button { flex:1; min-width:180px; background:#1f6feb; color:#fff; border:none; border-radius:14px; padding:16px; font-size:16px; font-weight:700; cursor:pointer; }
+  button.bike { background:#d29a1e; }
+  button:disabled { opacity:.45; }
+  button.ok { background:#2ea043; }
+  .warn { background:#3a1d1d; border:1px solid #5c2b2b; color:#ffb4b4; padding:12px 14px; border-radius:12px; font-size:13px; margin-bottom:14px; display:none; }
+  pre#log { background:#0a0d12; border:1px solid var(--bord); border-radius:12px; padding:12px; font-size:12px; line-height:1.5; color:#a9b4c2; height:200px; overflow:auto; white-space:pre-wrap; }
+  .logwrap { margin-top:18px; }
+  .logwrap .label { font-size:13px; color:var(--mut); font-weight:600; margin-bottom:6px; }
+</style>
+</head>
+<body>
+  <h1>Treino ao Vivo — Prova de Conceito</h1>
+  <div class="sub">Lê a frequência cardíaca do relógio Garmin e a potência da Wattbike, ao vivo, via Bluetooth.</div>
+
+  <div id="unsupported" class="warn">
+    ⚠️ Este navegador <b>não suporta Web Bluetooth</b>. Use o <b>Chrome no computador (Mac/PC)</b> ou o app <b>Bluefy</b> no iPhone/iPad. (Safari e Chrome do iPhone não funcionam.)
+  </div>
+
+  <div class="cards">
+    <div class="card hr"><div class="label">❤️ Frequência <span id="dotHR" class="dot"></span></div><div id="hr" class="val">--</div><div class="unit">bpm</div></div>
+    <div class="card pw"><div class="label">⚡ Potência <span id="dotPW" class="dot"></span></div><div id="pw" class="val">--</div><div class="unit">watts</div></div>
+    <div class="card cad"><div class="label">🔄 Cadência</div><div id="cad" class="val">--</div><div class="unit">rpm</div></div>
+  </div>
+
+  <div class="buttons">
+    <button id="btnHR">Conectar Frequência (relógio)</button>
+    <button id="btnBike" class="bike">Conectar Bike (Wattbike)</button>
+  </div>
+
+  <div class="logwrap">
+    <div class="label">Diagnóstico</div>
+    <pre id="log"></pre>
+  </div>
+
+<script>
+const $ = id => document.getElementById(id);
+function log(msg){ const t=new Date().toLocaleTimeString('pt-BR'); $("log").textContent += `[${t}] ${msg}\n`; $("log").scrollTop = $("log").scrollHeight; }
+
+if(!navigator.bluetooth){ $("unsupported").style.display="block"; log("Web Bluetooth indisponível neste navegador."); }
+else { log("Web Bluetooth disponível. Pronto."); }
+
+// ---------- Frequência cardíaca (relógio Garmin no modo Transmitir FC) ----------
+$("btnHR").onclick = async () => {
+  try {
+    log("Procurando emissor de FC (ligue 'Transmitir FC' no Epix)...");
+    const dev = await navigator.bluetooth.requestDevice({ filters:[{ services:['heart_rate'] }] });
+    log("Selecionado: " + (dev.name||"sem nome"));
+    dev.addEventListener('gattserverdisconnected', ()=>{ $("dotHR").classList.remove('on'); log("FC desconectada."); });
+    const server = await dev.gatt.connect();
+    const svc = await server.getPrimaryService('heart_rate');
+    const ch  = await svc.getCharacteristic('heart_rate_measurement');
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged', e => {
+      const dv = e.target.value;
+      const flags = dv.getUint8(0);
+      const hr = (flags & 0x01) ? dv.getUint16(1,true) : dv.getUint8(1);
+      $("hr").textContent = hr;
+    });
+    $("dotHR").classList.add('on'); $("btnHR").classList.add('ok'); $("btnHR").textContent = "FC conectada ✓";
+    log("FC conectada e recebendo dados.");
+  } catch(err){ log("Erro FC: " + err.message); }
+};
+
+// ---------- Potência/Cadência (Wattbike) ----------
+$("btnBike").onclick = async () => {
+  try {
+    log("Procurando a bike (selecione a Wattbike na lista)...");
+    const dev = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: ['cycling_power','fitness_machine','cycling_speed_and_cadence','heart_rate']
+    });
+    log("Selecionado: " + (dev.name||"sem nome"));
+    dev.addEventListener('gattserverdisconnected', ()=>{ $("dotPW").classList.remove('on'); log("Bike desconectada."); });
+    const server = await dev.gatt.connect();
+    const services = await server.getPrimaryServices();
+    log("Serviços encontrados: " + services.map(s=>s.uuid).join(', '));
+
+    const has = uuid => services.some(s => s.uuid.includes(uuid));
+    // FTMS dá potência E cadência -> preferir; senão Cycling Power (só potência fácil)
+    if (has('1826')) { await subFTMS(server); }
+    else if (has('1818')) { await subCyclingPower(server); }
+    else { log("⚠️ Nem FTMS (1826) nem Cycling Power (1818) nesta bike. Veja a lista acima."); return; }
+
+    $("dotPW").classList.add('on'); $("btnBike").classList.add('ok'); $("btnBike").textContent = "Bike conectada ✓";
+  } catch(err){ log("Erro Bike: " + err.message); }
+};
+
+async function subFTMS(server){
+  const svc = await server.getPrimaryService('fitness_machine');
+  const ch  = await svc.getCharacteristic('indoor_bike_data'); // 0x2AD2
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged', e => {
+    const dv = e.target.value; let o=0;
+    const flags = dv.getUint16(o,true); o+=2;
+    if(!(flags & 0x0001)) o+=2;            // Instantaneous Speed
+    if(flags & 0x0002) o+=2;               // Average Speed
+    let cad=null, pw=null;
+    if(flags & 0x0004){ cad = dv.getUint16(o,true)/2; o+=2; }  // Instantaneous Cadence (0.5/min)
+    if(flags & 0x0008) o+=2;               // Average Cadence
+    if(flags & 0x0010) o+=3;               // Total Distance (uint24)
+    if(flags & 0x0020) o+=2;               // Resistance
+    if(flags & 0x0040){ pw = dv.getInt16(o,true); o+=2; }      // Instantaneous Power
+    if(pw!==null) $("pw").textContent = pw;
+    if(cad!==null) $("cad").textContent = Math.round(cad);
+  });
+  log("Lendo potência/cadência via FTMS (Indoor Bike Data).");
+}
+
+async function subCyclingPower(server){
+  const svc = await server.getPrimaryService('cycling_power');
+  const ch  = await svc.getCharacteristic('cycling_power_measurement'); // 0x2A63
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged', e => {
+    const dv = e.target.value;
+    const pw = dv.getInt16(2,true); // Instantaneous Power (watts) em offset 2
+    $("pw").textContent = pw;
+  });
+  log("Lendo potência via Cycling Power Service (cadência fica para a próxima etapa).");
+}
+</script>
+</body>
+</html>
