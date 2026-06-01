@@ -3,141 +3,303 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
-<title>Treino ao Vivo — Prova de Conceito (FC + Watts)</title>
+<title>Treino ao Vivo — Bike Z2</title>
 <style>
-  :root { --bg:#0e1116; --card:#171c24; --bord:#262d38; --hr:#ff5a5f; --pw:#ffb02e; --cad:#37c2c4; --txt:#e9eef5; --mut:#8a95a5; }
-  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-  body { margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:16px; }
-  h1 { font-size:18px; font-weight:700; margin:4px 0 4px; }
-  .sub { color:var(--mut); font-size:13px; margin-bottom:16px; }
-  .cards { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; }
-  @media (max-width:560px){ .cards{ grid-template-columns:1fr; } }
-  .card { background:var(--card); border:1px solid var(--bord); border-radius:18px; padding:18px 16px; text-align:center; }
-  .card .label { font-size:14px; color:var(--mut); font-weight:600; }
-  .card .val { font-size:64px; font-weight:800; line-height:1.05; margin:6px 0; font-variant-numeric:tabular-nums; }
-  .card .unit { font-size:13px; color:var(--mut); }
-  .card.hr .val{ color:var(--hr);} .card.pw .val{ color:var(--pw);} .card.cad .val{ color:var(--cad);}
-  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; background:#444; margin-left:6px; vertical-align:middle; }
-  .dot.on { background:#37d67a; box-shadow:0 0 8px #37d67a; }
-  .buttons { display:flex; gap:12px; margin:18px 0; flex-wrap:wrap; }
-  button { flex:1; min-width:180px; background:#1f6feb; color:#fff; border:none; border-radius:14px; padding:16px; font-size:16px; font-weight:700; cursor:pointer; }
-  button.bike { background:#d29a1e; }
-  button:disabled { opacity:.45; }
-  button.ok { background:#2ea043; }
-  .warn { background:#3a1d1d; border:1px solid #5c2b2b; color:#ffb4b4; padding:12px 14px; border-radius:12px; font-size:13px; margin-bottom:14px; display:none; }
-  pre#log { background:#0a0d12; border:1px solid var(--bord); border-radius:12px; padding:12px; font-size:12px; line-height:1.5; color:#a9b4c2; height:200px; overflow:auto; white-space:pre-wrap; }
-  .logwrap { margin-top:18px; }
-  .logwrap .label { font-size:13px; color:var(--mut); font-weight:600; margin-bottom:6px; }
+  :root{ --bg:#0e1116; --card:#171c24; --bord:#262d38; --txt:#e9eef5; --mut:#8a95a5;
+         --azul:#2f7bff; --verde:#2ea043; --verm:#e5484d; --amar:#ffb02e; --ciano:#37c2c4; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:12px; }
+  h1{ font-size:16px; font-weight:700; margin:2px 0; }
+  .obj{ color:var(--mut); font-size:12px; margin-bottom:10px; }
+  .warn{ background:#3a1d1d; border:1px solid #5c2b2b; color:#ffb4b4; padding:10px 12px; border-radius:10px; font-size:12px; margin-bottom:10px; display:none; }
+
+  /* Semáforo grande */
+  #status{ border-radius:18px; padding:18px 16px; text-align:center; transition:background .25s; background:#222933; border:1px solid var(--bord); }
+  #status.azul{ background:#13315c; border-color:#2f7bff; }
+  #status.verde{ background:#123d22; border-color:#2ea043; }
+  #status.verm{ background:#3d1416; border-color:#e5484d; }
+  #status .blk{ font-size:13px; color:#cdd6e2; font-weight:600; letter-spacing:.5px; text-transform:uppercase; }
+  #status .msg{ font-size:30px; font-weight:800; margin:4px 0; }
+  #status .rest{ font-size:13px; color:#cdd6e2; }
+
+  .metrics{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 0; }
+  .m{ background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:10px 6px; text-align:center; }
+  .m .lab{ font-size:11px; color:var(--mut); font-weight:600; }
+  .m .val{ font-size:40px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .m .tgt{ font-size:11px; color:var(--mut); margin-top:2px; }
+  .m.hr .val{ color:#ff6b70;} .m.pw .val{ color:var(--amar);} .m.cad .val{ color:var(--ciano);}
+  .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#444; margin-left:4px; }
+  .dot.on{ background:#37d67a; }
+
+  /* Barra de tempo */
+  .tlwrap{ margin:12px 0 4px; }
+  .tlhead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
+  .timeline{ position:relative; height:34px; border-radius:9px; overflow:hidden; display:flex; border:1px solid var(--bord); }
+  .seg{ height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; color:#0e1116; font-weight:700; border-right:2px solid #0e1116; }
+  .seg:last-child{ border-right:none; }
+  #cursor{ position:absolute; top:-3px; bottom:-3px; width:3px; background:#fff; box-shadow:0 0 6px #fff; left:0; transition:left .5s linear; }
+  .ticks{ position:relative; height:14px; font-size:10px; color:var(--mut); }
+  .tick{ position:absolute; transform:translateX(-50%); }
+
+  .controls{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px; }
+  button{ background:#1f6feb; color:#fff; border:none; border-radius:12px; padding:14px 8px; font-size:14px; font-weight:700; cursor:pointer; }
+  button.bike{ background:#8a6d1e; } button.gray{ background:#39414d; }
+  button.go{ background:#2ea043; } button.stop{ background:#b5343a; } button.pause{ background:#8a6d1e; }
+  button:disabled{ opacity:.4; }
+  button.ok{ background:#1f5c2e; }
+  .controls.row2{ grid-template-columns:1fr 1fr 1fr; }
+
+  details{ margin-top:12px; } summary{ font-size:12px; color:var(--mut); cursor:pointer; }
+  pre#log{ background:#0a0d12; border:1px solid var(--bord); border-radius:10px; padding:10px; font-size:11px; line-height:1.5; color:#a9b4c2; height:140px; overflow:auto; white-space:pre-wrap; margin-top:6px; }
+  #resumo{ display:none; background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:14px; margin-top:12px; font-size:13px; }
+  #resumo h3{ margin:0 0 8px; } #resumo .row{ display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #20262f; }
+  textarea{ width:100%; height:90px; background:#0a0d12; color:#a9b4c2; border:1px solid var(--bord); border-radius:8px; font-size:11px; margin-top:8px; }
 </style>
 </head>
 <body>
-  <h1>Treino ao Vivo — Prova de Conceito</h1>
-  <div class="sub">Lê a frequência cardíaca do relógio Garmin e a potência da Wattbike, ao vivo, via Bluetooth.</div>
+  <h1 id="wname">Treino ao Vivo</h1>
+  <div class="obj" id="wobj"></div>
+  <div id="unsupported" class="warn">⚠️ Navegador sem Web Bluetooth. Use <b>Chrome no computador</b> ou <b>Bluefy</b> no iPhone/iPad.</div>
 
-  <div id="unsupported" class="warn">
-    ⚠️ Este navegador <b>não suporta Web Bluetooth</b>. Use o <b>Chrome no computador (Mac/PC)</b> ou o app <b>Bluefy</b> no iPhone/iPad. (Safari e Chrome do iPhone não funcionam.)
+  <div id="status">
+    <div class="blk" id="st-blk">— aguardando —</div>
+    <div class="msg" id="st-msg">Conecte e toque Iniciar</div>
+    <div class="rest" id="st-rest"></div>
   </div>
 
-  <div class="cards">
-    <div class="card hr"><div class="label">❤️ Frequência <span id="dotHR" class="dot"></span></div><div id="hr" class="val">--</div><div class="unit">bpm</div></div>
-    <div class="card pw"><div class="label">⚡ Potência <span id="dotPW" class="dot"></span></div><div id="pw" class="val">--</div><div class="unit">watts</div></div>
-    <div class="card cad"><div class="label">🔄 Cadência</div><div id="cad" class="val">--</div><div class="unit">rpm</div></div>
+  <div class="metrics">
+    <div class="m hr"><div class="lab">❤️ FC <span id="dotHR" class="dot"></span></div><div class="val" id="hr">--</div><div class="tgt" id="hr-tgt">alvo —</div></div>
+    <div class="m pw"><div class="lab">⚡ W <span id="dotPW" class="dot"></span></div><div class="val" id="pw">--</div><div class="tgt" id="pw-tgt">alvo —</div></div>
+    <div class="m cad"><div class="lab">🔄 rpm</div><div class="val" id="cad">--</div><div class="tgt" id="cad-tgt">alvo —</div></div>
   </div>
 
-  <div class="buttons">
-    <button id="btnHR">Conectar Frequência (relógio)</button>
-    <button id="btnBike" class="bike">Conectar Bike (Wattbike)</button>
+  <div class="tlwrap">
+    <div class="tlhead"><span id="elapsed">00:00</span><span id="total">/ 00:00</span></div>
+    <div class="timeline" id="timeline"><div id="cursor"></div></div>
+    <div class="ticks" id="ticks"></div>
   </div>
 
-  <div class="logwrap">
-    <div class="label">Diagnóstico</div>
+  <div class="controls">
+    <button id="btnHR">Conectar FC</button>
+    <button id="btnBike" class="bike">Conectar Bike</button>
+    <button id="btnDisc" class="gray">Desconectar</button>
+  </div>
+  <div class="controls row2" style="margin-top:8px;">
+    <button id="btnStart" class="go">▶ Iniciar</button>
+    <button id="btnPause" class="pause" disabled>⏸ Pausar</button>
+    <button id="btnFinish" class="stop" disabled>⏹ Finalizar</button>
+  </div>
+
+  <div id="resumo"></div>
+
+  <details>
+    <summary>Diagnóstico</summary>
     <pre id="log"></pre>
-  </div>
+  </details>
 
 <script>
 const $ = id => document.getElementById(id);
-function log(msg){ const t=new Date().toLocaleTimeString('pt-BR'); $("log").textContent += `[${t}] ${msg}\n`; $("log").scrollTop = $("log").scrollHeight; }
+function log(m){ const t=new Date().toLocaleTimeString('pt-BR'); $("log").textContent += `[${t}] ${m}\n`; $("log").scrollTop=$("log").scrollHeight; }
 
-if(!navigator.bluetooth){ $("unsupported").style.display="block"; log("Web Bluetooth indisponível neste navegador."); }
-else { log("Web Bluetooth disponível. Pronto."); }
-
-// ---------- Frequência cardíaca (relógio Garmin no modo Transmitir FC) ----------
-$("btnHR").onclick = async () => {
-  try {
-    log("Procurando emissor de FC (ligue 'Transmitir FC' no Epix)...");
-    const dev = await navigator.bluetooth.requestDevice({ filters:[{ services:['heart_rate'] }] });
-    log("Selecionado: " + (dev.name||"sem nome"));
-    dev.addEventListener('gattserverdisconnected', ()=>{ $("dotHR").classList.remove('on'); log("FC desconectada."); });
-    const server = await dev.gatt.connect();
-    const svc = await server.getPrimaryService('heart_rate');
-    const ch  = await svc.getCharacteristic('heart_rate_measurement');
-    await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged', e => {
-      const dv = e.target.value;
-      const flags = dv.getUint8(0);
-      const hr = (flags & 0x01) ? dv.getUint16(1,true) : dv.getUint8(1);
-      $("hr").textContent = hr;
-    });
-    $("dotHR").classList.add('on'); $("btnHR").classList.add('ok'); $("btnHR").textContent = "FC conectada ✓";
-    log("FC conectada e recebendo dados.");
-  } catch(err){ log("Erro FC: " + err.message); }
+/* ===================== TREINO DO DIA ===================== */
+const WORKOUT = {
+  name: "Bike Indoor — Z2 apertado +15% (1ª sessão Ciclo 2)",
+  objective: "Proposta +15% nos watts. Verde só com FC E watts na faixa. Só cor, sem som. FCmáx 174.",
+  blocks: [
+    { name:"Aquecimento", min:10, hr:[0,125],   power:[58,92],  cad:[80,95], color:"#37c2c4" },
+    { name:"Z2 apertado", min:40, hr:[120,155], power:[97,129], cad:[85,95], color:"#2ea043" },
+    { name:"Solta",       min:10, hr:[0,120],   power:[0,92],   cad:[70,90], color:"#5bd1d3" },
+  ]
 };
+const TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+b.min*60,0);
 
-// ---------- Potência/Cadência (Wattbike) ----------
-$("btnBike").onclick = async () => {
-  try {
-    log("Procurando a bike (selecione a Wattbike na lista)...");
-    const dev = await navigator.bluetooth.requestDevice({
-      acceptAllDevices: true,
-      optionalServices: ['cycling_power','fitness_machine','cycling_speed_and_cadence','heart_rate']
-    });
-    log("Selecionado: " + (dev.name||"sem nome"));
-    dev.addEventListener('gattserverdisconnected', ()=>{ $("dotPW").classList.remove('on'); log("Bike desconectada."); });
-    const server = await dev.gatt.connect();
-    const services = await server.getPrimaryServices();
-    log("Serviços encontrados: " + services.map(s=>s.uuid).join(', '));
+/* ===================== ESTADO ===================== */
+let hr=null, power=null, cad=null;
+let hrDev=null, bikeDev=null;
+let running=false, paused=false, elapsed=0, tickTimer=null;
+let lastZone=null;                // p/ disparar som só na transição
+const samples=[];                 // série temporal p/ resumo
 
-    const has = uuid => services.some(s => s.uuid.includes(uuid));
-    // FTMS dá potência E cadência -> preferir; senão Cycling Power (só potência fácil)
-    if (has('1826')) { await subFTMS(server); }
-    else if (has('1818')) { await subCyclingPower(server); }
-    else { log("⚠️ Nem FTMS (1826) nem Cycling Power (1818) nesta bike. Veja a lista acima."); return; }
+/* ===================== UI INICIAL ===================== */
+$("wname").textContent = WORKOUT.name;
+$("wobj").textContent = WORKOUT.objective;
+$("total").textContent = "/ " + fmt(TOTAL_SEC);
+if(!navigator.bluetooth){ $("unsupported").style.display="block"; } else { log("Web Bluetooth disponível."); }
+buildTimeline();
 
-    $("dotPW").classList.add('on'); $("btnBike").classList.add('ok'); $("btnBike").textContent = "Bike conectada ✓";
-  } catch(err){ log("Erro Bike: " + err.message); }
-};
+function fmt(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
 
-async function subFTMS(server){
-  const svc = await server.getPrimaryService('fitness_machine');
-  const ch  = await svc.getCharacteristic('indoor_bike_data'); // 0x2AD2
-  await ch.startNotifications();
-  ch.addEventListener('characteristicvaluechanged', e => {
-    const dv = e.target.value; let o=0;
-    const flags = dv.getUint16(o,true); o+=2;
-    if(!(flags & 0x0001)) o+=2;            // Instantaneous Speed
-    if(flags & 0x0002) o+=2;               // Average Speed
-    let cad=null, pw=null;
-    if(flags & 0x0004){ cad = dv.getUint16(o,true)/2; o+=2; }  // Instantaneous Cadence (0.5/min)
-    if(flags & 0x0008) o+=2;               // Average Cadence
-    if(flags & 0x0010) o+=3;               // Total Distance (uint24)
-    if(flags & 0x0020) o+=2;               // Resistance
-    if(flags & 0x0040){ pw = dv.getInt16(o,true); o+=2; }      // Instantaneous Power
-    if(pw!==null) $("pw").textContent = pw;
-    if(cad!==null) $("cad").textContent = Math.round(cad);
+function buildTimeline(){
+  const tl=$("timeline"), tk=$("ticks");
+  WORKOUT.blocks.forEach(b=>{
+    const d=document.createElement('div'); d.className='seg';
+    d.style.flex=b.min; d.style.background=b.color; d.textContent=b.name+" "+b.min+"′";
+    tl.appendChild(d);
   });
-  log("Lendo potência/cadência via FTMS (Indoor Bike Data).");
+  let acc=0;
+  WORKOUT.blocks.forEach((b,i)=>{
+    acc+=b.min*60;
+    if(i<WORKOUT.blocks.length-1){
+      const pct=acc/TOTAL_SEC*100;
+      const el=document.createElement('div'); el.className='tick'; el.style.left=pct+'%'; el.textContent=fmt(acc);
+      tk.appendChild(el);
+    }
+  });
 }
 
-async function subCyclingPower(server){
-  const svc = await server.getPrimaryService('cycling_power');
-  const ch  = await svc.getCharacteristic('cycling_power_measurement'); // 0x2A63
+function currentBlock(){
+  let acc=0;
+  for(const b of WORKOUT.blocks){ if(elapsed < acc+b.min*60) return {b, inSec: elapsed-acc, remSec: acc+b.min*60-elapsed}; acc+=b.min*60; }
+  const last=WORKOUT.blocks[WORKOUT.blocks.length-1]; return {b:last, inSec:last.min*60, remSec:0};
+}
+
+/* ===================== SOM (destravado no Iniciar) ===================== */
+let actx=null;
+function unlockAudio(){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); const o=actx.createOscillator(); const g=actx.createGain(); g.gain.value=0; o.connect(g); g.connect(actx.destination); o.start(); o.stop(actx.currentTime+0.01);}catch(e){} }
+function beep(freq, dur){ if(!actx) return; try{ const o=actx.createOscillator(), g=actx.createGain(); o.frequency.value=freq; o.connect(g); g.connect(actx.destination); g.gain.value=0.25; o.start(); o.stop(actx.currentTime+dur);}catch(e){} }
+
+/* ===================== LOOP DO TREINO ===================== */
+function startTick(){
+  tickTimer=setInterval(()=>{
+    if(paused) return;
+    elapsed++;
+    if(elapsed>=TOTAL_SEC){ tickUpdate(); finish(); return; }
+    tickUpdate();
+  },1000);
+}
+function tickUpdate(){
+  const {b,remSec}=currentBlock();
+  // métricas + alvos
+  $("hr").textContent = hr??"--";
+  $("pw").textContent = power??"--";
+  $("cad").textContent = cad??"--";
+  $("hr-tgt").textContent = "alvo "+b.hr[0]+"–"+b.hr[1];
+  $("pw-tgt").textContent = "alvo "+b.power[0]+"–"+b.power[1]+"W";
+  $("cad-tgt").textContent = "alvo "+b.cad[0]+"–"+b.cad[1];
+  // semáforo: precisa de FC E watts dentro da faixa (comando "os dois juntos")
+  const hrLow=hr!=null&&hr<b.hr[0], hrHigh=hr!=null&&hr>b.hr[1];
+  const pwLow=power!=null&&power<b.power[0], pwHigh=power!=null&&power>b.power[1];
+  let zone="verde", msg="NA FAIXA ✓";
+  if(hr==null&&power==null){ zone="gray"; msg="conecte FC + bike"; }
+  else if(hrHigh||pwHigh){ zone="verm"; msg = (hrHigh&&pwHigh)?"FC + Watts altos ↓":hrHigh?"FC alta ↓":"Watts altos ↓"; }
+  else if(hrLow||pwLow){ zone="azul"; msg = (hrLow&&pwLow)?"leve ↑ acelere":hrLow?"FC baixa ↑":"Watts baixos ↑"; }
+  const st=$("status"); st.className=""; if(zone!=="gray") st.classList.add(zone);
+  $("st-blk").textContent = b.name + " · faltam " + fmt(remSec);
+  $("st-msg").textContent = msg;
+  $("st-rest").textContent = "FC "+b.hr[0]+"–"+b.hr[1]+" · W "+b.power[0]+"–"+b.power[1];
+  lastZone=zone; // som desativado a pedido — só cor
+  // barra
+  $("elapsed").textContent = fmt(elapsed);
+  $("cursor").style.left = (elapsed/TOTAL_SEC*100)+"%";
+  // amostra
+  samples.push({t:elapsed, hr, power, cad, block:b.name, zone});
+}
+
+/* ===================== CONTROLES ===================== */
+$("btnStart").onclick=()=>{
+  if(running) return;
+  unlockAudio();
+  running=true; paused=false; elapsed=0; samples.length=0; lastZone=null;
+  $("resumo").style.display="none";
+  $("btnStart").disabled=true; $("btnPause").disabled=false; $("btnFinish").disabled=false;
+  $("btnStart").textContent="▶ Rodando";
+  log("Treino iniciado.");
+  tickUpdate(); startTick();
+};
+$("btnPause").onclick=()=>{
+  if(!running) return; paused=!paused;
+  $("btnPause").textContent = paused?"▶ Retomar":"⏸ Pausar";
+  log(paused?"Pausado.":"Retomado.");
+};
+$("btnFinish").onclick=()=>finish();
+function finish(){
+  if(!running) return;
+  running=false; clearInterval(tickTimer);
+  $("btnStart").disabled=false; $("btnStart").textContent="▶ Iniciar";
+  $("btnPause").disabled=true; $("btnPause").textContent="⏸ Pausar"; $("btnFinish").disabled=true;
+  $("status").className=""; $("st-msg").textContent="Treino finalizado"; $("st-blk").textContent="—"; $("st-rest").textContent="";
+  log("Treino finalizado em "+fmt(elapsed)+".");
+  showResumo();
+}
+
+/* ===================== RESUMO + EXPORT ===================== */
+function showResumo(){
+  const hrs=samples.filter(s=>s.hr!=null).map(s=>s.hr);
+  const pws=samples.filter(s=>s.power!=null).map(s=>s.power);
+  const inFaixa=samples.filter(s=>s.zone==="verde").length;
+  const pct = samples.length? Math.round(inFaixa/samples.length*100):0;
+  const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):"—";
+  const data = {
+    treino: WORKOUT.name, data: new Date().toISOString(), duracao_s: elapsed,
+    fc_media: avg(hrs), fc_max: hrs.length?Math.max(...hrs):"—",
+    watts_medio: avg(pws), pct_na_faixa: pct, amostras: samples
+  };
+  $("resumo").style.display="block";
+  $("resumo").innerHTML = `<h3>Resumo do treino</h3>
+    <div class="row"><span>Duração</span><b>${fmt(elapsed)}</b></div>
+    <div class="row"><span>FC média / máx</span><b>${data.fc_media} / ${data.fc_max} bpm</b></div>
+    <div class="row"><span>Watts médio</span><b>${data.watts_medio} W</b></div>
+    <div class="row"><span>Tempo na faixa-alvo</span><b>${pct}%</b></div>
+    <button id="btnExport" class="go" style="width:100%;margin-top:10px;">Exportar / Compartilhar</button>
+    <textarea id="json" readonly>${JSON.stringify(data)}</textarea>`;
+  try{ localStorage.setItem("treino_"+data.data, JSON.stringify(data)); }catch(e){}
+  $("btnExport").onclick=async()=>{
+    const txt=$("json").value;
+    if(navigator.share){ try{ await navigator.share({title:"Treino", text:txt}); return; }catch(e){} }
+    $("json").select(); document.execCommand && document.execCommand('copy'); log("Resumo copiado (cole onde quiser).");
+  };
+}
+
+/* ===================== BLUETOOTH ===================== */
+$("btnHR").onclick=async()=>{
+  try{
+    log("Procurando FC (ligue Transmitir FC no Epix)...");
+    hrDev=await navigator.bluetooth.requestDevice({ filters:[{services:['heart_rate']}] });
+    hrDev.addEventListener('gattserverdisconnected',()=>{ $("dotHR").classList.remove('on'); hr=null; log("FC desconectada."); });
+    const s=await hrDev.gatt.connect(); const svc=await s.getPrimaryService('heart_rate'); const ch=await svc.getCharacteristic('heart_rate_measurement');
+    await ch.startNotifications();
+    ch.addEventListener('characteristicvaluechanged',e=>{ const dv=e.target.value; const f=dv.getUint8(0); hr=(f&1)?dv.getUint16(1,true):dv.getUint8(1); if(!running)$("hr").textContent=hr; });
+    $("dotHR").classList.add('on'); $("btnHR").classList.add('ok'); $("btnHR").textContent="FC ✓"; log("FC conectada.");
+  }catch(e){ log("Erro FC: "+e.message); }
+};
+$("btnBike").onclick=async()=>{
+  try{
+    log("Procurando a bike (pedale p/ acordar; selecione a Wattbike)...");
+    bikeDev=await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:['cycling_power','fitness_machine','cycling_speed_and_cadence','heart_rate'] });
+    bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; log("Bike desconectada."); });
+    const srv=await bikeDev.gatt.connect(); const services=await srv.getPrimaryServices();
+    log("Serviços da bike: "+services.map(s=>s.uuid).join(', '));
+    const has=u=>services.some(s=>s.uuid.includes(u));
+    if(has('1826')) await subFTMS(srv); else if(has('1818')) await subCP(srv); else { log("⚠️ bike sem FTMS/Cycling Power — veja serviços acima."); return; }
+    $("dotPW").classList.add('on'); $("btnBike").classList.add('ok'); $("btnBike").textContent="Bike ✓";
+  }catch(e){ log("Erro Bike: "+e.message); }
+};
+$("btnDisc").onclick=()=>{
+  try{ hrDev&&hrDev.gatt.connected&&hrDev.gatt.disconnect(); }catch(e){}
+  try{ bikeDev&&bikeDev.gatt.connected&&bikeDev.gatt.disconnect(); }catch(e){}
+  $("dotHR").classList.remove('on'); $("dotPW").classList.remove('on');
+  $("btnHR").classList.remove('ok'); $("btnHR").textContent="Conectar FC";
+  $("btnBike").classList.remove('ok'); $("btnBike").textContent="Conectar Bike";
+  hr=power=cad=null; log("Desconectado FC + Bike.");
+};
+async function subFTMS(srv){
+  const svc=await srv.getPrimaryService('fitness_machine'); const ch=await svc.getCharacteristic('indoor_bike_data');
   await ch.startNotifications();
-  ch.addEventListener('characteristicvaluechanged', e => {
-    const dv = e.target.value;
-    const pw = dv.getInt16(2,true); // Instantaneous Power (watts) em offset 2
-    $("pw").textContent = pw;
+  ch.addEventListener('characteristicvaluechanged',e=>{
+    const dv=e.target.value; let o=0; const f=dv.getUint16(o,true); o+=2;
+    if(!(f&0x0001)) o+=2; if(f&0x0002) o+=2;
+    if(f&0x0004){ cad=Math.round(dv.getUint16(o,true)/2); o+=2; } if(f&0x0008) o+=2;
+    if(f&0x0010) o+=3; if(f&0x0020) o+=2;
+    if(f&0x0040){ power=dv.getInt16(o,true); o+=2; }
+    if(!running){ if(power!=null)$("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
   });
-  log("Lendo potência via Cycling Power Service (cadência fica para a próxima etapa).");
+  log("Lendo potência/cadência via FTMS.");
+}
+async function subCP(srv){
+  const svc=await srv.getPrimaryService('cycling_power'); const ch=await svc.getCharacteristic('cycling_power_measurement');
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged',e=>{ power=e.target.value.getInt16(2,true); if(!running)$("pw").textContent=power; });
+  log("Lendo potência via Cycling Power (cadência: próxima etapa).");
 }
 </script>
 </body>
