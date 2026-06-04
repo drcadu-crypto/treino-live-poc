@@ -281,7 +281,9 @@ $("btnBike").onclick=async()=>{
     const srv=await bikeDev.gatt.connect(); const services=await srv.getPrimaryServices();
     log("Serviços da bike: "+services.map(s=>s.uuid).join(', '));
     const has=u=>services.some(s=>s.uuid.includes(u));
-    if(has('1826')) await subFTMS(srv); else if(has('1818')) await subCP(srv); else { log("⚠️ bike sem FTMS/Cycling Power — veja serviços acima."); return; }
+    if(has('1826')){ await subFTMS(srv); }
+    else if(has('1818')){ await subCP(srv); if(has('1816')) await subCSC(srv); /* Wattbike: watts no 1818, cadência só no 1816 */ }
+    else { log("⚠️ bike sem FTMS/Cycling Power — veja serviços acima."); return; }
     $("dotPW").classList.add('on'); $("btnBike").classList.add('ok'); $("btnBike").textContent="Bike ✓";
   }catch(e){ log("Erro Bike: "+e.message); }
 };
@@ -302,11 +304,12 @@ async function subFTMS(srv){
     if(f&0x0004){ cad=Math.round(dv.getUint16(o,true)/2); o+=2; } if(f&0x0008) o+=2;
     if(f&0x0010) o+=3; if(f&0x0020) o+=2;
     if(f&0x0040){ power=dv.getInt16(o,true); o+=2; }
+    if(f&0x0004) lastPrimaryCadTs=Date.now(); // cadência veio do FTMS -> suprime fallback CSC
     if(!running){ if(power!=null)$("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
   });
   log("Lendo potência/cadência via FTMS.");
 }
-let lastCR=null, lastCT=null;
+let lastCR=null, lastCT=null, lastCCR=null, lastCCT=null, lastPrimaryCadTs=0;
 async function subCP(srv){
   const svc=await srv.getPrimaryService('cycling_power'); const ch=await svc.getCharacteristic('cycling_power_measurement');
   await ch.startNotifications();
@@ -316,12 +319,31 @@ async function subCP(srv){
     if(flags & 0x20){ // Crank Revolution Data Present -> cadência
       let o=4; if(flags&0x01)o+=1; if(flags&0x04)o+=2; if(flags&0x10)o+=6;
       const revs=dv.getUint16(o,true), t=dv.getUint16(o+2,true);
-      if(lastCR!=null){ let dr=revs-lastCR; if(dr<0)dr+=65536; let dt=t-lastCT; if(dt<0)dt+=65536; if(dt>0) cad=Math.round(dr/(dt/1024)*60); }
+      if(lastCR!=null){ let dr=revs-lastCR; if(dr<0)dr+=65536; let dt=t-lastCT; if(dt<0)dt+=65536; if(dt>0){ cad=Math.round(dr/(dt/1024)*60); lastPrimaryCadTs=Date.now(); } }
       lastCR=revs; lastCT=t;
     }
     if(!running){ $("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
   });
-  log("Lendo potência + cadência via Cycling Power.");
+  log("Lendo potência via Cycling Power.");
+}
+// Fallback de cadência via Cycling Speed and Cadence (1816) — Wattbike não manda RPM no perfil de potência.
+// Só escreve se o caminho primário (FTMS/CP-crank) não estiver entregando cadência (>3s sem dado primário).
+async function subCSC(srv){
+  let svc, ch;
+  try{ svc=await srv.getPrimaryService('cycling_speed_and_cadence'); ch=await svc.getCharacteristic('csc_measurement'); }
+  catch(e){ log("CSC indisponível: "+e.message); return; }
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged',e=>{
+    const dv=e.target.value; const flags=dv.getUint8(0); let o=1;
+    if(flags&0x01) o+=6; // Wheel Revolution Data (uint32 + uint16) -> pular
+    if(flags&0x02){ // Crank Revolution Data -> cadência
+      const revs=dv.getUint16(o,true), t=dv.getUint16(o+2,true);
+      if(lastCCR!=null){ let dr=revs-lastCCR; if(dr<0)dr+=65536; let dt=t-lastCCT; if(dt<0)dt+=65536;
+        if(dt>0 && Date.now()-lastPrimaryCadTs>3000){ cad=Math.round(dr/(dt/1024)*60); if(!running)$("cad").textContent=cad; } }
+      lastCCR=revs; lastCCT=t;
+    }
+  });
+  log("Cadência via CSC (1816) como fallback.");
 }
 </script>
 </body>
