@@ -12,7 +12,6 @@
   .falta{ font-weight:600; }
   .ok{ color:#2ea043; } .warn{ color:#ffd23f; }
   button.primary{ background:#2ea043; border-color:#2ea043; }
-  #saida{ white-space:pre-wrap; background:#161b22; border:1px solid #2a313c; border-radius:10px; padding:8px; font-family:ui-monospace,monospace; font-size:12px; }
 </style>
 </head>
 <body>
@@ -25,34 +24,41 @@
 <div id="blocos"></div>
 <div class="row">
   <button id="add">+ bloco</button>
-  <button id="gerar">Gerar JSON</button>
-  <button id="salvar" class="primary">Salvar no servidor</button>
+  <button id="salvar" class="primary">Salvar treino</button>
 </div>
-<pre id="saida"></pre>
 <div id="msg"></div>
 
 <script>
 const PORTEIRO_URL = "https://porteiro-treino.lipecoffee.com.br";
 const USER_ID = "drcadu";
 const TOKEN_KEY = "porteiro_token";
-const ZONAS = ["Z1","Z2","Z3","Z4","Z5","Z6","Z7"];
+// Nomes OFICIAIS das zonas de treinamento (Coggan). value = zona; texto = nome oficial.
+const ZONAS = [
+  { z:"Z1", nome:"Recuperação Ativa" },
+  { z:"Z2", nome:"Endurance" },
+  { z:"Z3", nome:"Ritmo (Tempo)" },
+  { z:"Z4", nome:"Limiar de Lactato" },
+  { z:"Z5", nome:"VO2 Máximo" },
+  { z:"Z6", nome:"Capacidade Anaeróbia" },
+  { z:"Z7", nome:"Potência Neuromuscular" },
+];
+function nomeDaZona(z){ const f=ZONAS.find(x=>x.z===z); return f?f.nome:z; }
 const $ = id => document.getElementById(id);
 function getApiToken(){ let t=""; try{t=localStorage.getItem(TOKEN_KEY)||"";}catch(e){}
   if(!t){ t=(prompt("Senha do app (token do Porteiro):")||"").trim(); if(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}} } return t; }
 
 let blocos = [];
-function addBloco(b){ blocos.push(b || {nome:"", min:5, zona:"Z2", cadOn:false, cadLo:85, cadHi:95}); render(); }
+function addBloco(b){ blocos.push(b || {zona:"Z2", min:5, cadOn:false, cadLo:85, cadHi:95}); render(); }
 function delBloco(i){ blocos.splice(i,1); render(); }
-
 function somaMin(){ return blocos.reduce((s,b)=>s+(parseInt(b.min)||0),0); }
+
 function render(){
   const wrap = $("blocos"); wrap.innerHTML = "";
   blocos.forEach((b,i)=>{
     const d = document.createElement("div"); d.className="blk";
     d.innerHTML = `<div class="row">
-        <input value="${b.nome}" placeholder="nome do bloco" data-k="nome" data-i="${i}" style="flex:1">
+        <select data-k="zona" data-i="${i}" style="flex:1">${ZONAS.map(o=>`<option value="${o.z}" ${o.z===b.zona?"selected":""}>${o.z} – ${o.nome}</option>`).join("")}</select>
         <input type="number" min="1" value="${b.min}" data-k="min" data-i="${i}" style="width:70px"> min
-        <select data-k="zona" data-i="${i}">${ZONAS.map(z=>`<option ${z===b.zona?"selected":""}>${z}</option>`).join("")}</select>
         <button data-del="${i}">×</button>
       </div>
       <div class="row">
@@ -86,13 +92,12 @@ function toJSON(){
     nome: $("nome").value.trim(),
     objetivo: $("objetivo").value.trim(),
     modalidade: "bike", origem: "manual",
-    blocos: blocos.map(b=>({ nome:b.nome.trim()||b.zona, min:parseInt(b.min)||0, zona:b.zona,
+    blocos: blocos.map(b=>({ nome:nomeDaZona(b.zona), min:parseInt(b.min)||0, zona:b.zona,
                              cad: b.cadOn ? [parseInt(b.cadLo)||0, parseInt(b.cadHi)||0] : null })),
   };
 }
 $("add").addEventListener("click", ()=>addBloco());
 $("total").addEventListener("input", atualizaFalta);
-$("gerar").addEventListener("click", ()=>{ $("saida").textContent = JSON.stringify(toJSON(), null, 2); });
 $("salvar").addEventListener("click", async ()=>{
   const body = toJSON();
   if(!body.nome){ $("msg").textContent="⚠️ dê um nome ao treino."; return; }
@@ -102,13 +107,13 @@ $("salvar").addEventListener("click", async ()=>{
       headers:{ "Content-Type":"application/json", "X-User-Id":USER_ID, "X-Api-Token":getApiToken() },
       body: JSON.stringify(body) });
     const j = await r.json().catch(()=>({}));
-    $("msg").textContent = r.ok ? ("✓ salvo: "+j.treino_id) : ("⚠️ erro "+r.status+": "+(j.error||""));
+    $("msg").textContent = r.ok ? ("✓ treino salvo!") : ("⚠️ erro "+r.status+": "+(j.error||""));
   }catch(e){ $("msg").textContent = "⚠️ sem rede: "+e.message; }
 });
 
-// começa com aquecimento Z1 + 1 bloco Z2
-addBloco({nome:"Aquecimento", min:8, zona:"Z1", cadOn:true, cadLo:80, cadHi:90});
-addBloco({nome:"Endurance", min:30, zona:"Z2", cadOn:true, cadLo:85, cadHi:95});
+// começa com aquecimento (Z1) + endurance (Z2)
+addBloco({zona:"Z1", min:8, cadOn:true, cadLo:80, cadHi:90});
+addBloco({zona:"Z2", min:30, cadOn:true, cadLo:85, cadHi:95});
 </script>
 </body>
 </html>
