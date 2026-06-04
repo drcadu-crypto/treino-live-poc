@@ -109,11 +109,11 @@ function log(m){ const t=new Date().toLocaleTimeString('pt-BR'); $("log").textCo
 /* ===================== TREINO DO DIA ===================== */
 const WORKOUT = {
   name: "Bike Indoor — Z2 puro (sexta 05/06)",
-  objective: "Recuperação aeróbica. FC é o MESTRE (teto 122 bpm); watts são guia. Verde só com FC E watts na faixa. Só cor, sem som. FCmáx 174. FTP base 180 provisório (até o teste de 15/06).",
+  objective: "Recuperação aeróbica. FTP 180 (confirmado em teste independente). Z2 = 100-135W (56-75% FTP). FC teto 122 = guarda-corpo. Verde só com FC E watts na faixa. Só cor, sem som. FCmáx 174.",
   blocks: [
-    { name:"Aquecimento", min:10, hr:[0,110],   power:[50,90],  cad:[80,95], color:"#37c2c4" },
-    { name:"Z2 puro",     min:40, hr:[105,122], power:[85,120], cad:[85,95], color:"#2ea043" },
-    { name:"Solta",       min:10, hr:[0,115],   power:[0,85],   cad:[70,90], color:"#5bd1d3" },
+    { name:"Aquecimento", min:10, hr:[0,115],   power:[60,100],  cad:[80,95], color:"#37c2c4" },
+    { name:"Z2 puro",     min:40, hr:[105,122], power:[100,135], cad:[85,95], color:"#2ea043" },
+    { name:"Solta",       min:10, hr:[0,115],   power:[0,95],    cad:[70,90], color:"#5bd1d3" },
   ]
 };
 const TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+b.min*60,0);
