@@ -6,7 +6,8 @@
 <title>Treino ao Vivo — Bike Z2</title>
 <style>
   :root{ --bg:#0e1116; --card:#171c24; --bord:#262d38; --txt:#e9eef5; --mut:#8a95a5;
-         --azul:#2f7bff; --verde:#2ea043; --verm:#e5484d; --amar:#ffb02e; --ciano:#37c2c4; }
+         --azul:#2f7bff; --verde:#2ea043; --verm:#e5484d; --amar:#ffb02e; --ciano:#37c2c4;
+         --rib-none:#2a313c; }  /* cores da fita agora vêm da paleta canônica ZONES (no JS) */
   *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
   body{ margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:12px; }
   h1{ font-size:16px; font-weight:700; margin:2px 0; }
@@ -31,15 +32,20 @@
   .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#444; margin-left:4px; }
   .dot.on{ background:#37d67a; }
 
-  /* Barra de tempo */
+  /* Lista de zonas */
   .tlwrap{ margin:12px 0 4px; }
   .tlhead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
-  .timeline{ position:relative; height:34px; border-radius:9px; overflow:hidden; display:flex; border:1px solid var(--bord); }
-  .seg{ height:100%; display:flex; align-items:center; justify-content:center; font-size:10px; color:#0e1116; font-weight:700; border-right:2px solid #0e1116; }
-  .seg:last-child{ border-right:none; }
-  #cursor{ position:absolute; top:-3px; bottom:-3px; width:3px; background:#fff; box-shadow:0 0 6px #fff; left:0; transition:left .5s linear; }
-  .ticks{ position:relative; height:14px; font-size:10px; color:var(--mut); }
-  .tick{ position:absolute; transform:translateX(-50%); }
+  .zonelist{ display:flex; flex-direction:column; gap:4px; margin-top:4px; }
+  .zrow{ display:grid; grid-template-columns:12px 1fr; gap:8px; align-items:start; padding:6px 8px; border-radius:8px; background:#0f141b; border:1px solid transparent; }
+  .zrow.active{ border-color:#fff; background:#161d27; }
+  .zrow .zdot{ width:12px; height:12px; border-radius:3px; margin-top:3px; }
+  .zrow .ztop{ display:flex; justify-content:space-between; gap:8px; }
+  .zrow .zname{ font-size:13px; font-weight:700; color:var(--txt); }
+  .zrow .zmin{ font-size:12px; color:var(--mut); white-space:nowrap; }
+  .zrow .ztgt{ font-size:11px; color:var(--mut); margin:1px 0 4px; }
+  .zrow .zbarwrap{ width:100%; }
+  .zrow .zbar{ position:relative; height:7px; border-radius:4px; overflow:hidden; }
+  .zrow .zbar i{ position:absolute; left:0; top:0; bottom:0; width:0; transition:width .3s linear; }
 
   .controls{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin-top:12px; }
   button{ background:#1f6feb; color:#fff; border:none; border-radius:12px; padding:14px 8px; font-size:14px; font-weight:700; cursor:pointer; }
@@ -49,14 +55,26 @@
   button.ok{ background:#1f5c2e; }
   .controls.row2{ grid-template-columns:1fr 1fr 1fr; }
 
+  /* Abas de conexão de bike */
+  .biketabs{ display:flex; gap:6px; margin:8px 0 6px; }
+  .btab{ flex:1; background:#161b22; border:1px solid var(--bord); color:var(--mut); border-radius:10px; padding:8px; font-size:13px; font-weight:700; }
+  .btab.on{ background:var(--card); color:var(--txt); border-color:var(--azul); }
+  .bikepane{ display:flex; gap:6px; margin-bottom:6px; }
+  .bikepane input{ flex:1; background:#0a0d12; border:1px solid var(--bord); color:var(--txt); border-radius:10px; padding:10px; font-size:15px; }
+
+  /* Equilíbrio das pernas (Wattbike) */
+  .balwrap{ background:var(--card); border:1px solid var(--bord); border-radius:12px; padding:10px; margin:8px 0 2px; }
+  .balhead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
+  .balsvg{ display:block; height:96px; }
+
   .tabs{ display:flex; gap:6px; margin-bottom:10px; }
   .tab{ flex:1; background:#161b22; border:1px solid var(--bord); color:var(--mut); border-radius:12px; padding:10px; font-size:14px; font-weight:700; }
   .tab.on{ background:var(--card); color:var(--txt); border-color:var(--azul); }
   #status .msg{ text-shadow:0 1px 2px rgba(0,0,0,.4); }
 
-  .ftpwrap{ margin:8px 0 2px; }
-  .ftphead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
-  .ftpbar{ position:relative; height:22px; border-radius:8px; background:#0a0d12; border:1px solid var(--bord); overflow:hidden; }
+  .ftpwrap{ margin:4px 0 1px; }
+  .ftphead{ display:flex; justify-content:space-between; font-size:11px; color:var(--mut); margin-bottom:2px; }
+  .ftpbar{ position:relative; height:9px; border-radius:5px; background:#0a0d12; border:1px solid var(--bord); overflow:hidden; }
   .ftpzone{ position:absolute; top:0; bottom:0; background:rgba(46,160,67,.28); border-left:1px solid var(--verde); border-right:1px solid var(--verde); }
   .ftpcursor{ position:absolute; top:-2px; bottom:-2px; width:3px; background:#fff; box-shadow:0 0 6px #fff; left:0; transition:left .3s linear; }
 
@@ -68,6 +86,21 @@
 
   details{ margin-top:12px; } summary{ font-size:12px; color:var(--mut); cursor:pointer; }
   pre#log{ background:#0a0d12; border:1px solid var(--bord); border-radius:10px; padding:10px; font-size:11px; line-height:1.5; color:#a9b4c2; height:140px; overflow:auto; white-space:pre-wrap; margin-top:6px; }
+  /* Potência em destaque */
+  .pwbig{ text-align:center; margin:6px 0 2px; line-height:1; }
+  .pwbig #pwBig{ font-size:52px; font-weight:800; letter-spacing:-2px; color:var(--amar); }
+  .pwbig .u{ font-size:18px; color:var(--mut); margin-left:4px; }
+
+  /* Fita de aderência por minuto */
+  .ribwrap{ margin:8px 0 2px; }
+  .ribhead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
+  .riblegend{ font-size:11px; color:var(--mut); line-height:1.4; margin-bottom:5px; }
+  .ribbon{ display:flex; gap:0; height:48px; border-radius:6px; overflow:hidden; background:#0a0d12; }   /* fita real (sua execução) — bem visível */
+  .ribbon.ribguide{ height:12px; margin-bottom:3px; opacity:.95; }                                       /* gabarito = referência fina em cima */
+  .ribbon .rib{ flex:1 1 0; background:var(--rib-none); }
+  .ribbon .rib.bsep{ box-shadow:inset 2px 0 0 #0a0d12; }                                                  /* traço entre blocos do treino (mesmo quando a cor é igual) */
+  .ribbon .rib.cur{ box-shadow:inset 0 0 0 2px #fff; }
+
   #resumo{ display:none; background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:14px; margin-top:12px; font-size:13px; }
   #resumo h3{ margin:0 0 8px; } #resumo .row{ display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #20262f; }
   textarea{ width:100%; height:90px; background:#0a0d12; color:#a9b4c2; border:1px solid var(--bord); border-radius:8px; font-size:11px; margin-top:8px; }
@@ -106,21 +139,40 @@
     <div class="ftpbar"><div id="ftpzone" class="ftpzone"></div><div id="ftpcursor" class="ftpcursor"></div></div>
   </div>
 
+  <div class="pwbig"><span id="pwBig">—</span><span class="u">W</span></div>
+
   <div class="tlwrap">
     <div class="tlhead"><span id="elapsed">00:00</span><span id="total">/ 00:00</span></div>
-    <div class="timeline" id="timeline"><div id="cursor"></div></div>
-    <div class="ticks" id="ticks"></div>
+    <div id="zoneList" class="zonelist"></div>
+  </div>
+
+  <div class="ribwrap">
+    <div class="ribhead"><span><b>Aderência ao alvo</b> · cima = gabarito · baixo = você</span></div>
+    <div class="riblegend">Cor = a <b>zona</b> em que você ficou. A fita de cima é o <b>gabarito</b> (o que o treino pediu); embaixo, o que você fez. Quanto mais parecidas, mais você cumpriu.</div>
+    <div id="ribGuide" class="ribbon ribguide"></div>
+    <div id="ribbon" class="ribbon"></div>
+    <div class="riblegend" id="ribScore">Cumprido: —</div>
   </div>
 
   <div class="controls">
     <button id="btnHR">Conectar FC</button>
-    <button id="btnBike" class="bike">Conectar Bike</button>
-    <button id="btnDisc" class="gray">Desconectar</button>
+    <button id="btnDisc" class="gray" style="grid-column:span 2;">Desconectar</button>
   </div>
-  <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-    <label for="bikeNum" style="font-size:13px;opacity:.85;">Nº da bike:</label>
-    <input id="bikeNum" type="text" inputmode="text" placeholder='Keiser ex: 7  ·  ou "Wattbike"'
-      style="flex:1;min-width:140px;padding:7px 9px;border-radius:8px;border:1px solid #444;background:#1a1a1a;color:#fff;font-size:15px;">
+  <div class="biketabs">
+    <button id="btabKeiser" class="btab">Keiser</button>
+    <button id="btabWatt" class="btab on">Wattbike</button>
+  </div>
+  <div id="paneKeiser" class="bikepane" style="display:none;">
+    <input id="bikeNum" inputmode="numeric" placeholder="nº da Keiser (ex.: 7)" />
+    <button id="btnKeiser" class="bike">Conectar Keiser</button>
+  </div>
+  <div id="paneWatt" class="bikepane">
+    <button id="btnWatt" class="bike" style="width:100%;">Conectar Wattbike</button>
+  </div>
+
+  <div id="balwrap" class="balwrap" style="display:none;">
+    <div class="balhead"><span>Equilíbrio das pernas</span><span id="balTxt" class="mut"></span></div>
+    <svg id="balSvg" class="balsvg" viewBox="0 0 120 104" width="100%" preserveAspectRatio="xMidYMid meet"></svg>
   </div>
   <div class="controls row2" style="margin-top:8px;">
     <button id="btnStart" class="go">▶ Iniciar</button>
@@ -158,8 +210,38 @@ function log(m){ const t=new Date().toLocaleTimeString('pt-BR'); $("log").textCo
 /* ===================== PORTEIRO (cano de dados) ===================== */
 const PORTEIRO_URL = "https://porteiro-treino.lipecoffee.com.br"; // domínio Railway (confirmar no deploy, Task 6)
 const USER_ID = "drcadu";
-const FTP_APP = 180; // FTP de referência do app (mesmo do backend; provisório até teste 15/06)
-const API_TOKEN = "xdU33lOhu2fNJtovopEU16MUXoojJKJV"; // crachá simples (spec §4.3); preencher c/ PORTEIRO_API_TOKEN do Task 6
+let FTP_APP = 180; // fallback; o valor real vem do backend via /config (fonte única) — sobrescrito no load
+// Paleta canônica Z1–Z7 (cor = zona; fonte única p/ lista + fita)
+const ZONES = [
+  {k:"Z1", hi:0.55, cor:"#5b6b7a"},
+  {k:"Z2", hi:0.75, cor:"#37c2c4"},
+  {k:"Z3", hi:0.90, cor:"#2ea043"},
+  {k:"Z4", hi:1.05, cor:"#ffd23f"},
+  {k:"Z5", hi:1.20, cor:"#ff8c2e"},
+  {k:"Z6", hi:1.50, cor:"#e5484d"},
+  {k:"Z7", hi:Infinity, cor:"#d24dff"},
+];
+// índice 0..6 da zona p/ uma potência (null/sem dado -> -1)
+function zoneIdx(watts){
+  if(watts==null) return -1;
+  const r = watts / FTP_APP;
+  for(let i=0;i<ZONES.length;i++){ if(r < ZONES[i].hi) return i; }
+  return ZONES.length-1;
+}
+function zoneColor(watts){ const i=zoneIdx(watts); return i<0 ? "var(--rib-none)" : ZONES[i].cor; }
+// zona-alvo de um bloco = zona do meio da faixa de potência
+function blockZoneIdx(b){ return zoneIdx((b.power[0]+b.power[1])/2); }
+const TOKEN_KEY = "porteiro_token";
+// A': o token NÃO fica no código (repo é público). Guardado só neste aparelho (localStorage),
+// digitado 1x quando for de fato ENVIAR um treino ou abrir o Histórico. Ler FC/watts não usa token.
+function getApiToken(force){
+  let t=""; try{ t=localStorage.getItem(TOKEN_KEY)||""; }catch(e){}
+  if(!t && force){
+    t=(window.prompt("Cole a senha do app (token do Porteiro) — fica guardada só neste aparelho:")||"").trim();
+    if(t){ try{ localStorage.setItem(TOKEN_KEY,t); }catch(e){} }
+  }
+  return t;
+}
 const QUEUE_KEY = "porteiro_fila";
 
 function genSessionId(iso){
@@ -179,7 +261,7 @@ async function sendToPorteiro(obj){
   try{
     const r = await fetch(PORTEIRO_URL + "/session", {
       method:"POST",
-      headers:{ "Content-Type":"application/json", "X-User-Id":USER_ID, "X-Api-Token":API_TOKEN },
+      headers:{ "Content-Type":"application/json", "X-User-Id":USER_ID, "X-Api-Token":getApiToken(false) },
       body: JSON.stringify(obj)
     });
     if(r.ok){ dequeue(obj.session_id); log("✓ Sessão enviada ao Porteiro ("+obj.session_id+")."); return true; }
@@ -190,51 +272,83 @@ async function flushQueue(){
   let fila=[]; try{ fila=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); }catch(e){}
   for(const obj of fila){ await sendToPorteiro(obj); }
 }
+async function loadConfig(){ // fonte única do FTP: lê do backend; se offline mantém o fallback
+  const tk=getApiToken(false); if(!tk) return; // sem token (ex.: só testando FC): mantém fallback, não incomoda
+  try{
+    const r = await fetch(PORTEIRO_URL + "/config", { headers:{ "X-Api-Token":tk } });
+    if(r.ok){ const c = await r.json(); if(c && c.ftp){ FTP_APP = c.ftp; log("FTP do servidor: "+FTP_APP+"W"); RIB_TARGET = buildTarget(); buildRibbon(); buildZones(); } }
+  }catch(e){ /* offline -> mantém FTP_APP fallback */ }
+}
 
 /* ===================== TREINO DO DIA ===================== */
 const WORKOUT = {
-  name: "Bike Indoor — Z2 puro (sexta 05/06)",
-  objective: "Recuperação aeróbica. FTP 180 (confirmado em teste independente). Z2 = 100-135W (56-75% FTP). FC teto 122 = guarda-corpo. Verde só com FC E watts na faixa. Só cor, sem som. FCmáx 174.",
+  name: "Bike Indoor — Teste geral Z2→Z6 (05/06)",
+  objective: "Treino de TESTE do app: percorre Z2 a Z6 (FTP 180) pra validar fita/cores/balanço. Cadência: FORÇA 60-70 rpm no Z3, giro alto/sprint >85 no Z5/Z6, recuperação >75 na solta. ⚠️ Z5/Z6 são intensos — faça com cautela (é teste, não precisa estourar). FCmáx 174. Só cor, sem som.",
   blocks: [
-    { name:"Aquecimento", min:8,  hr:[0,115],   power:[60,100],  cad:[80,95], color:"#37c2c4" },
-    { name:"Z2 puro",     min:30, hr:[105,122], power:[100,135], cad:[85,95], color:"#2ea043" },
-    { name:"Solta",       min:7,  hr:[0,115],   power:[0,95],    cad:[70,90], color:"#5bd1d3" },
+    { name:"Aquecimento", min:5, hr:[0,118],     power:[70,95],   cad:[80,90]  },
+    { name:"Z2 endurance",min:5, hr:[104,122],   power:[101,135], cad:[85,95]  },
+    { name:"Z3 força",    min:3, hr:[122,139],   power:[137,162], cad:[60,70]  },
+    { name:"Z4 limiar",   min:3, hr:[139,157],   power:[164,189], cad:[90,100] },
+    { name:"Z5 VO2máx",   min:2, hr:[157,165],   power:[191,216], cad:[95,105] },
+    { name:"Z6 anaeróbio",min:1, hr:[165,174],   power:[218,270], cad:[100,110]},
+    { name:"Solta",       min:4, hr:[0,115],     power:[0,99],    cad:[70,85]  },
   ]
 };
 const TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+b.min*60,0);
+// resolução da fita em SEGUNDOS (tempo real; não 1/min, p/ não quebrar HIIT 30s)
+const RIB_STEP = TOTAL_SEC > 2400 ? 10 : 5;   // >40min usa 10s; senão 5s
+const RIB_N = Math.ceil(TOTAL_SEC / RIB_STEP); // nº de células
+// índices de célula que iniciam um novo bloco do treino (separador visual; não depende de FTP)
+const RIB_BLOCKSTART = (()=>{ const set=new Set(); let acc=0; for(const b of WORKOUT.blocks){ if(acc>0) set.add(Math.round(acc/RIB_STEP)); acc+=b.min*60; } return set; })();
+// gabarito: zona-alvo (idx) de cada célula, pelo bloco que cobre seu ponto médio
+// função (não const) p/ recomputar quando o FTP real chega do backend — senão o gabarito fica preso no FTP fallback
+function buildTarget(){
+  return Array.from({length:RIB_N}, (_,s)=>{
+    const t = s*RIB_STEP + RIB_STEP/2; let acc=0;
+    for(const b of WORKOUT.blocks){ if(t < acc+b.min*60) return blockZoneIdx(b); acc+=b.min*60; }
+    return blockZoneIdx(WORKOUT.blocks[WORKOUT.blocks.length-1]);
+  });
+}
+let RIB_TARGET = buildTarget();
 
 /* ===================== ESTADO ===================== */
-let hr=null, power=null, cad=null;
+let hr=null, power=null, cad=null, balL=null;
 let hrDev=null, bikeDev=null;
 let running=false, paused=false, elapsed=0, tickTimer=null;
 let lastZone=null;                // p/ disparar som só na transição
 const samples=[];                 // série temporal p/ resumo
+const ribAgg=[];                  // soma/contagem de potência por minuto (fita O(células), não O(células×amostras))
+const zoneFills=[];               // cache dos <i> da lista de zonas (evita querySelector por tick)
 
 /* ===================== UI INICIAL ===================== */
 $("wname").textContent = WORKOUT.name;
 $("wobj").textContent = WORKOUT.objective;
 $("total").textContent = "/ " + fmt(TOTAL_SEC);
 if(!navigator.bluetooth){ $("unsupported").style.display="block"; } else { log("Web Bluetooth disponível."); }
-buildTimeline();
+buildZones();
+buildRibbon();
+loadConfig();  // puxa o FTP de referência do backend (fonte única)
 flushQueue(); // re-tenta sessões que ficaram na fila (envio falhou antes)
 
 function fmt(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
 
-function buildTimeline(){
-  const tl=$("timeline"), tk=$("ticks");
-  WORKOUT.blocks.forEach(b=>{
-    const d=document.createElement('div'); d.className='seg';
-    d.style.flex=b.min; d.style.background=b.color; d.textContent=b.name+" "+b.min+"′";
-    tl.appendChild(d);
-  });
-  let acc=0;
-  WORKOUT.blocks.forEach((b,i)=>{
-    acc+=b.min*60;
-    if(i<WORKOUT.blocks.length-1){
-      const pct=acc/TOTAL_SEC*100;
-      const el=document.createElement('div'); el.className='tick'; el.style.left=pct+'%'; el.textContent=fmt(acc);
-      tk.appendChild(el);
-    }
+function buildZones(){
+  const host=$("zoneList"); if(!host) return; host.innerHTML=""; zoneFills.length=0;
+  const maxMin=Math.max(...WORKOUT.blocks.map(b=>b.min));
+  WORKOUT.blocks.forEach((b)=>{
+    const pwTxt = (b.power[0]>0 ? b.power[0]+"–"+b.power[1]+"W" : "<"+b.power[1]+"W");
+    const tgt = pwTxt + " · " + b.cad[0]+"–"+b.cad[1]+" rpm";
+    const row=document.createElement('div'); row.className='zrow';
+    const cor = ZONES[blockZoneIdx(b)].cor;
+    row.innerHTML =
+      `<span class="zdot" style="background:${cor}"></span>`+
+      `<div class="zmain">`+
+        `<div class="ztop"><span class="zname">${b.name}</span><span class="zmin">${b.min}′</span></div>`+
+        `<div class="ztgt">${tgt}</div>`+
+        `<div class="zbarwrap"><div class="zbar" style="width:${(b.min/maxMin*100).toFixed(1)}%;background:${cor}33"><i style="background:${cor}"></i></div></div>`+
+      `</div>`;
+    host.appendChild(row);
+    zoneFills.push(row.querySelector('.zbar i')); // cache do preenchimento p/ o tick
   });
 }
 
@@ -242,6 +356,33 @@ function currentBlock(){
   let acc=0;
   for(const b of WORKOUT.blocks){ if(elapsed < acc+b.min*60) return {b, inSec: elapsed-acc, remSec: acc+b.min*60-elapsed}; acc+=b.min*60; }
   const last=WORKOUT.blocks[WORKOUT.blocks.length-1]; return {b:last, inSec:last.min*60, remSec:0};
+}
+
+/* ===================== FITA DE ADERÊNCIA ===================== */
+
+function buildRibbon(){
+  const guide=$("ribGuide"), real=$("ribbon");
+  if(guide){ guide.innerHTML=""; for(let s=0;s<RIB_N;s++){ const d=document.createElement('div'); d.className='rib'; if(RIB_BLOCKSTART.has(s)) d.classList.add('bsep'); const i=RIB_TARGET[s]; d.style.background = i<0?"var(--rib-none)":ZONES[i].cor; guide.appendChild(d); } }
+  real.innerHTML=""; for(let s=0;s<RIB_N;s++){ const d=document.createElement('div'); d.className='rib'; if(RIB_BLOCKSTART.has(s)) d.classList.add('bsep'); real.appendChild(d); }
+}
+
+function paintRibbon(){
+  const host=$("ribbon"); if(!host) return;
+  if(!host.children.length) buildRibbon();
+  let pts=0, cnt=0;
+  for(let s=0;s<RIB_N;s++){
+    const cell=host.children[s]; if(!cell) continue;
+    const sStart=s*RIB_STEP, sEnd=(s+1)*RIB_STEP;
+    if(elapsed < sStart){ cell.style.background="var(--rib-none)"; cell.classList.remove('cur'); continue; }
+    const a=ribAgg[s];
+    if(a && a.n){
+      const w=a.sum/a.n, rz=zoneIdx(w), tz=RIB_TARGET[s];
+      cell.style.background = zoneColor(w);
+      if(tz>=0){ const d=Math.abs(rz-tz); pts += d===0?1:(d===1?0.5:0); cnt++; }
+    } else { cell.style.background="var(--rib-none)"; }
+    cell.classList.toggle('cur', elapsed>=sStart && elapsed<sEnd);
+  }
+  const sc=$("ribScore"); if(sc) sc.textContent = cnt? `Cumprido: ${Math.round(pts/cnt*100)}% do treino proposto` : "Cumprido: —";
 }
 
 /* ===================== SOM (destravado no Iniciar) ===================== */
@@ -301,18 +442,36 @@ function tickUpdate(){
   $("st-msg").textContent = msg;
   $("st-rest").textContent = "FC "+b.hr[0]+"–"+b.hr[1]+" · W "+b.power[0]+"–"+b.power[1];
   lastZone=zone; // som desativado a pedido — só cor
-  // barra
+  // lista de zonas: preenche a barra de cada zona pelo progresso + destaca a ativa
+  { const rows=$("zoneList").children; let acc=0;
+    for(let k=0;k<WORKOUT.blocks.length;k++){
+      const dur=WORKOUT.blocks[k].min*60, start=acc; acc+=dur;
+      const pf = elapsed<=start ? 0 : (elapsed>=acc ? 100 : (elapsed-start)/dur*100);
+      const fill = zoneFills[k]; // cacheado em buildZones
+      if(fill) fill.style.width = pf.toFixed(1) + "%";
+      if(rows[k]) rows[k].classList.toggle('active', elapsed>=start && elapsed<acc);
+    }
+  }
+  // barra de tempo
   $("elapsed").textContent = fmt(elapsed);
-  $("cursor").style.left = (elapsed/TOTAL_SEC*100)+"%";
+  // potência em destaque
+  $("pwBig").textContent = power!=null ? power : "—";
   // amostra
-  samples.push({t:elapsed, hr, power, cad, block:b.name, zone});
+  samples.push({t:elapsed, hr, power, cad, block:b.name, zone, tz: RIB_TARGET[Math.floor(elapsed/RIB_STEP)] ?? -1});
+  if(power!=null){ const si=Math.floor(elapsed/RIB_STEP); (ribAgg[si] || (ribAgg[si]={sum:0,n:0})); ribAgg[si].sum+=power; ribAgg[si].n++; }
+  // fita de aderência
+  paintRibbon();
+  // equilíbrio das pernas (Wattbike)
+  renderBalance();
 }
 
 /* ===================== CONTROLES ===================== */
 $("btnStart").onclick=()=>{
   if(running) return;
   unlockAudio(); requestWakeLock();
-  running=true; paused=false; elapsed=0; samples.length=0; lastZone=null;
+  running=true; paused=false; elapsed=0; samples.length=0; ribAgg.length=0; lastZone=null;
+  lastCR=lastCT=lastCCR=lastCCT=null; // zera deltas de cadência: bike conectada entre 2 treinos não gera RPM absurdo no 1º sample
+  buildRibbon();
   $("resumo").style.display="none";
   $("cliques").style.display="none";
   $("btnStart").disabled=true; $("btnPause").disabled=false; $("btnFinish").disabled=false;
@@ -333,6 +492,7 @@ function finish(){
   $("btnPause").disabled=true; $("btnPause").textContent="⏸ Pausar"; $("btnFinish").disabled=true;
   $("status").className=""; $("st-msg").textContent="Treino finalizado"; $("st-blk").textContent="—"; $("st-rest").textContent="";
   log("Treino finalizado em "+fmt(elapsed)+".");
+  paintRibbon();
   askCliques((doisCliques)=>{ showResumo(doisCliques); });
 }
 
@@ -354,12 +514,19 @@ function askCliques(onDone){
 }
 
 /* ===================== RESUMO + EXPORT ===================== */
+// nota final = mesma regra da fita (exata=1, vizinha=½, 2+ zonas=0), sobre as células com dado e com alvo
+function ribScorePct(){
+  // nota FINAL: itera as amostras (1/s) igual ao servidor (aderencia() em metrics.py),
+  // p/ o número do resumo bater exatamente com o persistido. (A prévia ao vivo na fita é por célula.)
+  let pts=0,cnt=0;
+  for(const s of samples){ const tz=s.tz; if(s.power==null||tz==null||tz<0) continue; const rz=zoneIdx(s.power); if(rz<0) continue; const d=Math.abs(rz-tz); pts+= d===0?1:(d===1?0.5:0); cnt++; }
+  return cnt? Math.round(pts/cnt*100) : 0;
+}
 function showResumo(doisCliques){
   const hrs=samples.filter(s=>s.hr!=null).map(s=>s.hr);
   const pws=samples.filter(s=>s.power!=null).map(s=>s.power);
-  const inFaixa=samples.filter(s=>s.zone==="verde").length;
-  const pct = samples.length? Math.round(inFaixa/samples.length*100):0;
-  const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):"—";
+  const pct = ribScorePct();
+  const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null; // null (não "—"/NaN) p/ campo numérico do banco
   const iso = new Date().toISOString();
   const status = (elapsed < TOTAL_SEC) ? "parcial" : "normal";
   const data = {
@@ -368,20 +535,21 @@ function showResumo(doisCliques){
     esporte: "indoor_cycling",
     treino: WORKOUT.name, data: iso, duracao_s: elapsed,
     fc_media: avg(hrs), fc_max: hrs.length?Math.max(...hrs):null,
-    watts_medio: avg(pws), pct_na_faixa: pct, status: status, amostras: samples,
+    watts_medio: avg(pws), status: status, amostras: samples, // pct_na_faixa NÃO vai no payload: servidor calcula das amostras (fonte única)
     dois_cliques: doisCliques || null,
   };
   $("resumo").style.display="block";
   $("resumo").innerHTML = `<h3>Resumo do treino</h3>
     <div class="row"><span>Duração</span><b>${fmt(elapsed)}</b></div>
-    <div class="row"><span>FC média / máx</span><b>${data.fc_media} / ${data.fc_max} bpm</b></div>
-    <div class="row"><span>Watts médio</span><b>${data.watts_medio} W</b></div>
-    <div class="row"><span>Tempo na faixa-alvo</span><b>${pct}%</b></div>
+    <div class="row"><span>FC média / máx</span><b>${data.fc_media??"—"} / ${data.fc_max??"—"} bpm</b></div>
+    <div class="row"><span>Watts médio</span><b>${data.watts_medio??"—"} W</b></div>
+    <div class="row"><span>Cumprido do proposto</span><b>${pct}%</b></div>
     <button id="btnExport" class="go" style="width:100%;margin-top:10px;">Exportar / Compartilhar</button>
     <textarea id="json" readonly>${JSON.stringify(data)}</textarea>`;
   try{ localStorage.setItem("treino_"+data.data, JSON.stringify(data)); }catch(e){}
   enqueue(data);          // buffer durável: garante que não se perde
-  sendToPorteiro(data);   // tenta já; se falhar, fica na fila p/ o flush do próximo boot
+  getApiToken(true);      // ação explícita do usuário: pede a senha do app 1x (se ainda não tiver) p/ poder enviar
+  sendToPorteiro(data).then(ok=>{ if(ok) histLoaded=false; }); // POST ok -> invalida cache p/ a aba Histórico re-buscar e mostrar o treino recém-salvo
   $("btnExport").onclick=async()=>{
     const txt=$("json").value;
     if(navigator.share){ try{ await navigator.share({title:"Treino", text:txt}); return; }catch(e){} }
@@ -401,27 +569,28 @@ $("btnHR").onclick=async()=>{
     $("dotHR").classList.add('on'); $("btnHR").classList.add('ok'); $("btnHR").textContent="FC ✓"; log("FC conectada.");
   }catch(e){ log("Erro FC: "+e.message); }
 };
-$("btnBike").onclick=async()=>{
+async function connectBike(mode, num){
   try{
     const bikeSvcs=['cycling_power','fitness_machine','cycling_speed_and_cadence'];
-    const num=(($("bikeNum")&&$("bikeNum").value)||"").trim();
+    balL=null; renderBalance(); // reset balanço ao (re)conectar qualquer bike
     let reqOpts;
-    if(num){
-      const filters=[{namePrefix:num}]; // Wattbike: digite "Wattbike"
-      if(/^\d+$/.test(num)){ // Keiser: nº fica no FIM do nome (M3iS#007) -> tenta nome exato em 1/2/3 dígitos
+    if(mode==='keiser'){
+      if(!num){ log("Digite o nº da Keiser"); return; }
+      const filters=[{namePrefix:num}];
+      if(/^\d+$/.test(num)){
         const n=parseInt(num,10), seen=new Set();
         [String(n), String(n).padStart(2,'0'), String(n).padStart(3,'0')].forEach(v=>{
           if(!seen.has(v)){ seen.add(v); filters.push({name:"M3iS#"+v}); }
         }); // 7 / 07 / 007 -> todos incluem "M3iS#007"; 15 / 015 -> "M3iS#015"
       }
-      log("Procurando só a bike '"+num+"'… pedale p/ ela acordar.");
+      log("Procurando Keiser '"+num+"'… pedale p/ ela acordar.");
       reqOpts={ filters, optionalServices:bikeSvcs };
-    } else {
-      log("Pedale p/ acordar e escolha: Wattbike = 'Wattbike…' · Keiser = 'M3i…' (dica: ponha o Nº da bike pra filtrar)");
-      reqOpts={ filters:bikeSvcs.map(s=>({services:[s]})), optionalServices:bikeSvcs };
+    } else { // wattbike
+      log("Procurando Wattbike… pedale p/ ela acordar.");
+      reqOpts={ filters:[{namePrefix:'Wattbike'}], optionalServices:bikeSvcs };
     }
     bikeDev=await navigator.bluetooth.requestDevice(reqOpts);
-    bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; log("Bike desconectada."); });
+    bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; balL=null; renderBalance(); log("Bike desconectada."); });
     const srv=await bikeDev.gatt.connect(); const services=await srv.getPrimaryServices();
     gotBikeData=false;
     log("Conectado em: "+(bikeDev.name||"(sem nome)")+" — agora PEDALE p/ os números aparecerem.");
@@ -429,16 +598,27 @@ $("btnBike").onclick=async()=>{
     if(has('1826')){ await subFTMS(srv); }
     else if(has('1818')){ await subCP(srv); if(has('1816')) await subCSC(srv); /* Wattbike: watts no 1818, cadência só no 1816 */ }
     else { log("⚠️ bike sem FTMS/Cycling Power — veja serviços acima."); return; }
-    $("dotPW").classList.add('on'); $("btnBike").classList.add('ok'); $("btnBike").textContent="Bike ✓";
+    $("dotPW").classList.add('on');
+    log("Bike conectada ✓");
   }catch(e){ log("Erro Bike: "+e.message); }
-};
+}
+
+function showBikeTab(which){
+  $("paneKeiser").style.display = which==="keiser" ? "flex" : "none";
+  $("paneWatt").style.display   = which==="watt"   ? "flex" : "none";
+  $("btabKeiser").classList.toggle("on", which==="keiser");
+  $("btabWatt").classList.toggle("on", which==="watt");
+}
+$("btabKeiser").onclick=()=>showBikeTab("keiser");
+$("btabWatt").onclick=()=>showBikeTab("watt");
+$("btnKeiser").onclick=()=>connectBike("keiser", ($("bikeNum").value||"").trim());
+$("btnWatt").onclick=()=>connectBike("wattbike", "");
 $("btnDisc").onclick=()=>{
   try{ hrDev&&hrDev.gatt.connected&&hrDev.gatt.disconnect(); }catch(e){}
   try{ bikeDev&&bikeDev.gatt.connected&&bikeDev.gatt.disconnect(); }catch(e){}
   $("dotHR").classList.remove('on'); $("dotPW").classList.remove('on');
   $("btnHR").classList.remove('ok'); $("btnHR").textContent="Conectar FC";
-  $("btnBike").classList.remove('ok'); $("btnBike").textContent="Conectar Bike";
-  hr=power=cad=null; log("Desconectado FC + Bike.");
+  hr=power=cad=null; balL=null; renderBalance(); log("Desconectado FC + Bike.");
 };
 async function subFTMS(srv){
   const svc=await srv.getPrimaryService('fitness_machine'); const ch=await svc.getCharacteristic('indoor_bike_data');
@@ -451,7 +631,7 @@ async function subFTMS(srv){
     if(f&0x0040){ power=dv.getInt16(o,true); o+=2; }
     if(f&0x0004) lastPrimaryCadTs=Date.now(); // cadência veio do FTMS -> suprime fallback CSC
     if(!gotBikeData){ gotBikeData=true; log("✓ Recebendo dados da bike (FTMS): "+(power??"-")+"W "+(cad??"-")+"rpm"); }
-    if(!running){ if(power!=null)$("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
+    if(!running){ if(power!=null){ $("pw").textContent=power; $("pwBig").textContent=power; } if(cad!=null)$("cad").textContent=cad; }
   });
   log("Lendo potência/cadência via FTMS.");
 }
@@ -462,6 +642,8 @@ async function subCP(srv){
   ch.addEventListener('characteristicvaluechanged',e=>{
     const dv=e.target.value; const flags=dv.getUint16(0,true);
     power=dv.getInt16(2,true);
+    if(flags & 0x0001){ balL = dv.getUint8(4)/2; } // Pedal Power Balance (Wattbike): % perna esquerda
+    // offset correto: flags=2B + power=2B → balance em byte 4 (bit0 set)
     if(flags & 0x20){ // Crank Revolution Data Present -> cadência
       let o=4; if(flags&0x01)o+=1; if(flags&0x04)o+=2; if(flags&0x10)o+=6;
       const revs=dv.getUint16(o,true), t=dv.getUint16(o+2,true);
@@ -469,7 +651,7 @@ async function subCP(srv){
       lastCR=revs; lastCT=t;
     }
     if(!gotBikeData){ gotBikeData=true; log("✓ Recebendo dados da bike (Cycling Power): "+(power??"-")+"W"); }
-    if(!running){ $("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
+    if(!running){ if(power!=null){ $("pw").textContent=power; $("pwBig").textContent=power; } if(cad!=null)$("cad").textContent=cad; renderBalance(); }
   });
   log("Lendo potência via Cycling Power.");
 }
@@ -493,13 +675,31 @@ async function subCSC(srv){
   log("Cadência via CSC (1816) como fallback.");
 }
 
+/* ===================== EQUILÍBRIO DAS PERNAS ===================== */
+function renderBalance(){
+  const wrap=$("balwrap"); if(!wrap) return;
+  if(balL==null){ wrap.style.display="none"; return; }   // Keiser / sem dado -> some
+  wrap.style.display="block";
+  const L=Math.max(0,Math.min(100,balL)), R=100-L;
+  const sym = (L>=45 && L<=55);
+  const col = sym ? "var(--verde)" : "var(--verm)";
+  const SC=0.52, cy=52, ry=40;
+  const rxL=Math.max(7,L*SC), rxR=Math.max(7,R*SC);
+  const cxL=Math.max(4,60-rxL), cxR=Math.min(116,60+rxR);
+  $("balSvg").innerHTML =
+    `<line x1="60" y1="6" x2="60" y2="98" stroke="#ffffff44" stroke-width="1"/>`+
+    `<ellipse cx="${cxL.toFixed(1)}" cy="${cy}" rx="${rxL.toFixed(1)}" ry="${ry}" fill="none" stroke="${col}" stroke-width="3"/>`+
+    `<ellipse cx="${cxR.toFixed(1)}" cy="${cy}" rx="${rxR.toFixed(1)}" ry="${ry}" fill="none" stroke="${col}" stroke-width="3"/>`;
+  $("balTxt").innerHTML = `E ${Math.round(L)}% · D ${Math.round(R)}% · ${sym?"simétrico":"assimétrico"}`;
+}
+
 /* ===================== HISTÓRICO ===================== */
 let histLoaded = false;
 async function loadHistory(force){
   if(histLoaded && !force) return;
   $("histList").textContent = "carregando…";
   try{
-    const r = await fetch(PORTEIRO_URL + "/sessions?user_id=" + USER_ID, { headers:{ "X-Api-Token":API_TOKEN } });
+    const r = await fetch(PORTEIRO_URL + "/sessions?user_id=" + USER_ID, { headers:{ "X-Api-Token":getApiToken(true) } });
     if(!r.ok){ $("histList").textContent = "erro "+r.status; return; }
     const data = await r.json();
     renderForm(data.pmc);
@@ -525,9 +725,13 @@ function renderList(sessions){
   if(!sessions || !sessions.length){ $("histList").textContent="nenhum treino ainda"; return; }
   const fmtMin = s => Math.round((s||0)/60)+"min";
   $("histList").innerHTML = sessions.slice().reverse().map(s=>{
-    const carga = s.carga_tss!=null ? Math.round(s.carga_tss) : "—";
+    const left = `${s.data_local||""} · ${s.esporte||""} · ${fmtMin(s.duracao_s)}`;
+    if(s.pontuada===false || s.carga_tss==null){ // não-pontuada (sem sensor) -> sinaliza, não conta no PMC
+      return `<div class="histrow"><span>${left}</span><span class="tss" style="color:var(--mut);font-weight:400;">sem carga ⚠︎</span></div>`;
+    }
     const tag = s.metodo_tss==="fc_lthr" ? "hrTSS" : (s.metodo_tss==="potencia" ? "TSS" : "—");
-    return `<div class="histrow"><span>${s.data_local||""} · ${s.esporte||""} · ${fmtMin(s.duracao_s)}</span><span class="tss">${carga} ${tag}</span></div>`;
+    const ader = (s.aderencia_pct!=null) ? ` · ${s.aderencia_pct}% cumprido` : "";
+    return `<div class="histrow"><span>${left}</span><span class="tss">${Math.round(s.carga_tss)} ${tag}${ader}</span></div>`;
   }).join("");
 }
 function renderGraph(pmc){
