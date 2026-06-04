@@ -284,9 +284,12 @@ $("btnBike").onclick=async()=>{
     const num=(($("bikeNum")&&$("bikeNum").value)||"").trim();
     let reqOpts;
     if(num){
-      const filters=[{namePrefix:num}]; // Wattbike: digite "Wattbike" / nº no começo do nome
-      if(/^\d+$/.test(num)){ // Keiser: nº fica no FIM do nome (M3iS#007) -> nome exato
-        filters.push({name:"M3iS#"+num.padStart(3,'0')}, {name:"M3iS#"+num});
+      const filters=[{namePrefix:num}]; // Wattbike: digite "Wattbike"
+      if(/^\d+$/.test(num)){ // Keiser: nº fica no FIM do nome (M3iS#007) -> tenta nome exato em 1/2/3 dígitos
+        const n=parseInt(num,10), seen=new Set();
+        [String(n), String(n).padStart(2,'0'), String(n).padStart(3,'0')].forEach(v=>{
+          if(!seen.has(v)){ seen.add(v); filters.push({name:"M3iS#"+v}); }
+        }); // 7 / 07 / 007 -> todos incluem "M3iS#007"; 15 / 015 -> "M3iS#015"
       }
       log("Procurando só a bike '"+num+"'… pedale p/ ela acordar.");
       reqOpts={ filters, optionalServices:bikeSvcs };
