@@ -318,28 +318,40 @@ async function loadWorkout(treinoId){
   log("Treino fallback embutido.");
 }
 
-async function loadBiblioteca(){
-  const tk = getApiToken(false); if(!tk) return; // sem token: usa fallback/cache, não lista
+async function loadBiblioteca(force){
+  const sel = $("treino-sel"); if(!sel) return false;
+  const tk = getApiToken(force ? true : false);
+  if(!tk){ // sem token: não lista (FC segue funcionando). Convida a liberar.
+    sel.innerHTML = '<option value="">🔑 toque em Carregar p/ liberar os treinos</option>';
+    return false;
+  }
   try{
     const r = await fetch(PORTEIRO_URL + "/treinos?user_id=" + USER_ID, { headers:{ "X-Api-Token":tk } });
-    if(!r.ok) return;
+    if(!r.ok){ log("Não consegui listar treinos ("+r.status+")."); return false; }
     const body = await r.json();
-    const sel = $("treino-sel"); if(!sel) return; sel.innerHTML = "";
+    const lista = body.treinos || [];
+    sel.innerHTML = "";
+    if(!lista.length){ sel.innerHTML = '<option value="">(nenhum treino salvo ainda)</option>'; return false; }
     const salvo = localStorage.getItem("treino_sel_id");
-    for(const t of (body.treinos||[])){
+    for(const t of lista){
       const o = document.createElement("option");
       o.value = t.treino_id;
       o.textContent = (t.de_fabrica ? "★ " : "") + t.nome;
       if(t.treino_id === salvo) o.selected = true;
       sel.appendChild(o);
     }
-  }catch(e){ /* offline: mantém o que tiver */ }
+    return true;
+  }catch(e){ log("Sem rede pra listar treinos."); return false; }
 }
 function ligarPicker(){
   const btn = $("btn-carregar");
-  if(btn) btn.addEventListener("click", ()=>{
-    const id = $("treino-sel").value;
-    if(!id) return;
+  if(btn) btn.addEventListener("click", async ()=>{
+    let id = $("treino-sel").value;
+    if(!id){ // lista vazia (provável: sem token salvo) -> pede senha e popula
+      const ok = await loadBiblioteca(true);
+      if(ok) log("Treinos liberados — escolha um e toque Carregar.");
+      return;
+    }
     try{ localStorage.setItem("treino_sel_id", id); }catch(e){}
     loadWorkout(id);
   });
