@@ -275,11 +275,12 @@ $("btnHR").onclick=async()=>{
 };
 $("btnBike").onclick=async()=>{
   try{
-    log("Procurando a bike (pedale p/ acordar; selecione a Wattbike)...");
-    bikeDev=await navigator.bluetooth.requestDevice({ acceptAllDevices:true, optionalServices:['cycling_power','fitness_machine','cycling_speed_and_cadence','heart_rate'] });
+    log("Pedale p/ acordar a bike e escolha: Wattbike = 'Wattbike…' · Keiser = 'M3i…'");
+    bikeDev=await navigator.bluetooth.requestDevice({ filters:[{services:['fitness_machine']},{services:['cycling_power']},{services:['cycling_speed_and_cadence']}], optionalServices:['cycling_power','fitness_machine','cycling_speed_and_cadence'] });
     bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; log("Bike desconectada."); });
     const srv=await bikeDev.gatt.connect(); const services=await srv.getPrimaryServices();
-    log("Serviços da bike: "+services.map(s=>s.uuid).join(', '));
+    gotBikeData=false;
+    log("Conectado em: "+(bikeDev.name||"(sem nome)")+" — agora PEDALE p/ os números aparecerem.");
     const has=u=>services.some(s=>s.uuid.includes(u));
     if(has('1826')){ await subFTMS(srv); }
     else if(has('1818')){ await subCP(srv); if(has('1816')) await subCSC(srv); /* Wattbike: watts no 1818, cadência só no 1816 */ }
@@ -305,11 +306,12 @@ async function subFTMS(srv){
     if(f&0x0010) o+=3; if(f&0x0020) o+=2;
     if(f&0x0040){ power=dv.getInt16(o,true); o+=2; }
     if(f&0x0004) lastPrimaryCadTs=Date.now(); // cadência veio do FTMS -> suprime fallback CSC
+    if(!gotBikeData){ gotBikeData=true; log("✓ Recebendo dados da bike (FTMS): "+(power??"-")+"W "+(cad??"-")+"rpm"); }
     if(!running){ if(power!=null)$("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
   });
   log("Lendo potência/cadência via FTMS.");
 }
-let lastCR=null, lastCT=null, lastCCR=null, lastCCT=null, lastPrimaryCadTs=0;
+let lastCR=null, lastCT=null, lastCCR=null, lastCCT=null, lastPrimaryCadTs=0, gotBikeData=false;
 async function subCP(srv){
   const svc=await srv.getPrimaryService('cycling_power'); const ch=await svc.getCharacteristic('cycling_power_measurement');
   await ch.startNotifications();
@@ -322,6 +324,7 @@ async function subCP(srv){
       if(lastCR!=null){ let dr=revs-lastCR; if(dr<0)dr+=65536; let dt=t-lastCT; if(dt<0)dt+=65536; if(dt>0){ cad=Math.round(dr/(dt/1024)*60); lastPrimaryCadTs=Date.now(); } }
       lastCR=revs; lastCT=t;
     }
+    if(!gotBikeData){ gotBikeData=true; log("✓ Recebendo dados da bike (Cycling Power): "+(power??"-")+"W"); }
     if(!running){ $("pw").textContent=power; if(cad!=null)$("cad").textContent=cad; }
   });
   log("Lendo potência via Cycling Power.");
