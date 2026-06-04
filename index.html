@@ -84,6 +84,11 @@
     <button id="btnBike" class="bike">Conectar Bike</button>
     <button id="btnDisc" class="gray">Desconectar</button>
   </div>
+  <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+    <label for="bikeNum" style="font-size:13px;opacity:.85;">Nº da bike:</label>
+    <input id="bikeNum" type="text" inputmode="text" placeholder='Keiser ex: 7  ·  ou "Wattbike"'
+      style="flex:1;min-width:140px;padding:7px 9px;border-radius:8px;border:1px solid #444;background:#1a1a1a;color:#fff;font-size:15px;">
+  </div>
   <div class="controls row2" style="margin-top:8px;">
     <button id="btnStart" class="go">▶ Iniciar</button>
     <button id="btnPause" class="pause" disabled>⏸ Pausar</button>
@@ -275,8 +280,21 @@ $("btnHR").onclick=async()=>{
 };
 $("btnBike").onclick=async()=>{
   try{
-    log("Pedale p/ acordar a bike e escolha: Wattbike = 'Wattbike…' · Keiser = 'M3i…'");
-    bikeDev=await navigator.bluetooth.requestDevice({ filters:[{services:['fitness_machine']},{services:['cycling_power']},{services:['cycling_speed_and_cadence']}], optionalServices:['cycling_power','fitness_machine','cycling_speed_and_cadence'] });
+    const bikeSvcs=['cycling_power','fitness_machine','cycling_speed_and_cadence'];
+    const num=(($("bikeNum")&&$("bikeNum").value)||"").trim();
+    let reqOpts;
+    if(num){
+      const filters=[{namePrefix:num}]; // Wattbike: digite "Wattbike" / nº no começo do nome
+      if(/^\d+$/.test(num)){ // Keiser: nº fica no FIM do nome (M3iS#007) -> nome exato
+        filters.push({name:"M3iS#"+num.padStart(3,'0')}, {name:"M3iS#"+num});
+      }
+      log("Procurando só a bike '"+num+"'… pedale p/ ela acordar.");
+      reqOpts={ filters, optionalServices:bikeSvcs };
+    } else {
+      log("Pedale p/ acordar e escolha: Wattbike = 'Wattbike…' · Keiser = 'M3i…' (dica: ponha o Nº da bike pra filtrar)");
+      reqOpts={ filters:bikeSvcs.map(s=>({services:[s]})), optionalServices:bikeSvcs };
+    }
+    bikeDev=await navigator.bluetooth.requestDevice(reqOpts);
     bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; log("Bike desconectada."); });
     const srv=await bikeDev.gatt.connect(); const services=await srv.getPrimaryServices();
     gotBikeData=false;
