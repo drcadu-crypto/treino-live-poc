@@ -25,7 +25,7 @@
   .metrics{ display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; margin:10px 0; }
   .m{ background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:10px 6px; text-align:center; }
   .m .lab{ font-size:11px; color:var(--mut); font-weight:600; }
-  .m .val{ font-size:40px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .m .val{ font-size:40px; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; letter-spacing:-1px; }
   .m .tgt{ font-size:11px; color:var(--mut); margin-top:2px; }
   .m.hr .val{ color:#ff6b70;} .m.pw .val{ color:var(--amar);} .m.cad .val{ color:var(--ciano);}
   .dot{ display:inline-block; width:8px; height:8px; border-radius:50%; background:#444; margin-left:4px; }
@@ -49,14 +49,42 @@
   button.ok{ background:#1f5c2e; }
   .controls.row2{ grid-template-columns:1fr 1fr 1fr; }
 
+  .tabs{ display:flex; gap:6px; margin-bottom:10px; }
+  .tab{ flex:1; background:#161b22; border:1px solid var(--bord); color:var(--mut); border-radius:12px; padding:10px; font-size:14px; font-weight:700; }
+  .tab.on{ background:var(--card); color:var(--txt); border-color:var(--azul); }
+  #status .msg{ text-shadow:0 1px 2px rgba(0,0,0,.4); }
+
+  .ftpwrap{ margin:8px 0 2px; }
+  .ftphead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
+  .ftpbar{ position:relative; height:22px; border-radius:8px; background:#0a0d12; border:1px solid var(--bord); overflow:hidden; }
+  .ftpzone{ position:absolute; top:0; bottom:0; background:rgba(46,160,67,.28); border-left:1px solid var(--verde); border-right:1px solid var(--verde); }
+  .ftpcursor{ position:absolute; top:-2px; bottom:-2px; width:3px; background:#fff; box-shadow:0 0 6px #fff; left:0; transition:left .3s linear; }
+
+  #cliques{ background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:14px; margin-top:12px; }
+  .card2{ margin-bottom:12px; } .card2 .q{ font-size:13px; color:var(--txt); margin-bottom:8px; }
+  .btnrow{ display:flex; flex-wrap:wrap; gap:6px; }
+  .btnrow .pick{ flex:1; min-width:34px; background:#1f2630; border:1px solid var(--bord); color:var(--txt); border-radius:10px; padding:12px 4px; font-size:15px; font-weight:700; }
+  .btnrow .pick.sel{ background:var(--verde); border-color:var(--verde); color:#06210f; }
+
   details{ margin-top:12px; } summary{ font-size:12px; color:var(--mut); cursor:pointer; }
   pre#log{ background:#0a0d12; border:1px solid var(--bord); border-radius:10px; padding:10px; font-size:11px; line-height:1.5; color:#a9b4c2; height:140px; overflow:auto; white-space:pre-wrap; margin-top:6px; }
   #resumo{ display:none; background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:14px; margin-top:12px; font-size:13px; }
   #resumo h3{ margin:0 0 8px; } #resumo .row{ display:flex; justify-content:space-between; padding:3px 0; border-bottom:1px solid #20262f; }
   textarea{ width:100%; height:90px; background:#0a0d12; color:#a9b4c2; border:1px solid var(--bord); border-radius:8px; font-size:11px; margin-top:8px; }
+
+  .formbig{ background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:14px; text-align:center; }
+  .formbig .lab{ font-size:12px; color:var(--mut); } .formbig .num{ font-size:44px; font-weight:800; }
+  .formbig.fresh .num{ color:var(--verde); } .formbig.tired .num{ color:var(--amar); } .formbig.risk .num{ color:var(--verm); }
+  .histrow{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #20262f; font-size:13px; }
+  .histrow .tss{ font-weight:700; }
 </style>
 </head>
 <body>
+  <div class="tabs">
+    <button id="tabLive" class="tab on">🚴 Ao Vivo</button>
+    <button id="tabHist" class="tab">📊 Histórico</button>
+  </div>
+  <section id="viewLive">
   <h1 id="wname">Treino ao Vivo</h1>
   <div class="obj" id="wobj"></div>
   <div id="unsupported" class="warn">⚠️ Navegador sem Web Bluetooth. Use <b>Chrome no computador</b> ou <b>Bluefy</b> no iPhone/iPad.</div>
@@ -71,6 +99,11 @@
     <div class="m hr"><div class="lab">❤️ FC <span id="dotHR" class="dot"></span></div><div class="val" id="hr">--</div><div class="tgt" id="hr-tgt">alvo —</div></div>
     <div class="m pw"><div class="lab">⚡ W <span id="dotPW" class="dot"></span></div><div class="val" id="pw">--</div><div class="tgt" id="pw-tgt">alvo —</div></div>
     <div class="m cad"><div class="lab">🔄 rpm</div><div class="val" id="cad">--</div><div class="tgt" id="cad-tgt">alvo —</div></div>
+  </div>
+
+  <div class="ftpwrap">
+    <div class="ftphead"><span>Potência vs alvo</span><span id="ftplab">— % FTP</span></div>
+    <div class="ftpbar"><div id="ftpzone" class="ftpzone"></div><div id="ftpcursor" class="ftpcursor"></div></div>
   </div>
 
   <div class="tlwrap">
@@ -95,16 +128,68 @@
     <button id="btnFinish" class="stop" disabled>⏹ Finalizar</button>
   </div>
 
+  <div id="cliques" style="display:none;">
+    <div class="card2"><div class="q">Esforço — o quão duro foi? (1 fácil → 10 máximo)</div>
+      <div id="rpeRow" class="btnrow"></div></div>
+    <div class="card2"><div class="q">Sensação — como você se sente?</div>
+      <div id="sensRow" class="btnrow"></div></div>
+    <button id="btnCliquesOk" class="go" style="width:100%;margin-top:8px;" disabled>Confirmar</button>
+  </div>
+
   <div id="resumo"></div>
 
   <details>
     <summary>Diagnóstico</summary>
     <pre id="log"></pre>
   </details>
+  </section>
+
+  <section id="viewHist" style="display:none;">
+    <div class="formbig"><div class="lab">Forma (Form) hoje</div><div id="formNum" class="num">—</div><div id="formMsg" class="mut"></div></div>
+    <div id="histGraph"></div>
+    <h3 style="font-size:14px;margin:14px 0 6px;">Treinos</h3>
+    <div id="histList" class="mut">carregando…</div>
+  </section>
 
 <script>
 const $ = id => document.getElementById(id);
 function log(m){ const t=new Date().toLocaleTimeString('pt-BR'); $("log").textContent += `[${t}] ${m}\n`; $("log").scrollTop=$("log").scrollHeight; }
+
+/* ===================== PORTEIRO (cano de dados) ===================== */
+const PORTEIRO_URL = "https://porteiro-treino.lipecoffee.com.br"; // domínio Railway (confirmar no deploy, Task 6)
+const USER_ID = "drcadu";
+const FTP_APP = 180; // FTP de referência do app (mesmo do backend; provisório até teste 15/06)
+const API_TOKEN = "xdU33lOhu2fNJtovopEU16MUXoojJKJV"; // crachá simples (spec §4.3); preencher c/ PORTEIRO_API_TOKEN do Task 6
+const QUEUE_KEY = "porteiro_fila";
+
+function genSessionId(iso){
+  const suf = Math.random().toString(16).slice(2,6);
+  return USER_ID + "-" + iso + "-" + suf;
+}
+function enqueue(obj){
+  let fila=[]; try{ fila=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); }catch(e){}
+  fila.push(obj); try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(fila)); }catch(e){}
+}
+function dequeue(sessionId){
+  let fila=[]; try{ fila=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); }catch(e){}
+  fila = fila.filter(o=>o.session_id!==sessionId);
+  try{ localStorage.setItem(QUEUE_KEY, JSON.stringify(fila)); }catch(e){}
+}
+async function sendToPorteiro(obj){
+  try{
+    const r = await fetch(PORTEIRO_URL + "/session", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json", "X-User-Id":USER_ID, "X-Api-Token":API_TOKEN },
+      body: JSON.stringify(obj)
+    });
+    if(r.ok){ dequeue(obj.session_id); log("✓ Sessão enviada ao Porteiro ("+obj.session_id+")."); return true; }
+    log("⚠️ Porteiro respondeu "+r.status+" — fica na fila p/ re-tentar."); return false;
+  }catch(e){ log("⚠️ Envio falhou ("+e.message+") — fica na fila p/ re-tentar."); return false; }
+}
+async function flushQueue(){
+  let fila=[]; try{ fila=JSON.parse(localStorage.getItem(QUEUE_KEY)||"[]"); }catch(e){}
+  for(const obj of fila){ await sendToPorteiro(obj); }
+}
 
 /* ===================== TREINO DO DIA ===================== */
 const WORKOUT = {
@@ -131,6 +216,7 @@ $("wobj").textContent = WORKOUT.objective;
 $("total").textContent = "/ " + fmt(TOTAL_SEC);
 if(!navigator.bluetooth){ $("unsupported").style.display="block"; } else { log("Web Bluetooth disponível."); }
 buildTimeline();
+flushQueue(); // re-tenta sessões que ficaram na fila (envio falhou antes)
 
 function fmt(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
 
@@ -192,6 +278,17 @@ function tickUpdate(){
   $("hr-tgt").textContent = "alvo "+b.hr[0]+"–"+b.hr[1];
   $("pw-tgt").textContent = "alvo "+b.power[0]+"–"+b.power[1]+"W";
   $("cad-tgt").textContent = "alvo "+b.cad[0]+"–"+b.cad[1];
+  // barra de FTP: faixa-alvo do bloco + cursor da potência atual (escala 0..FTP_APP*1.5)
+  const SCALE = FTP_APP * 1.5;
+  const z0 = Math.min(100, b.power[0] / SCALE * 100), z1 = Math.min(100, b.power[1] / SCALE * 100);
+  $("ftpzone").style.left = z0 + "%";
+  $("ftpzone").style.width = Math.max(0, z1 - z0) + "%";
+  if (power != null) {
+    $("ftpcursor").style.left = Math.min(100, power / SCALE * 100) + "%";
+    $("ftplab").textContent = Math.round(power / FTP_APP * 100) + "% FTP · " + power + "W";
+  } else {
+    $("ftplab").textContent = "— % FTP";
+  }
   // semáforo: precisa de FC E watts dentro da faixa (comando "os dois juntos")
   const hrLow=hr!=null&&hr<b.hr[0], hrHigh=hr!=null&&hr>b.hr[1];
   const pwLow=power!=null&&power<b.power[0], pwHigh=power!=null&&power>b.power[1];
@@ -217,6 +314,7 @@ $("btnStart").onclick=()=>{
   unlockAudio(); requestWakeLock();
   running=true; paused=false; elapsed=0; samples.length=0; lastZone=null;
   $("resumo").style.display="none";
+  $("cliques").style.display="none";
   $("btnStart").disabled=true; $("btnPause").disabled=false; $("btnFinish").disabled=false;
   $("btnStart").textContent="▶ Rodando";
   log("Treino iniciado.");
@@ -235,20 +333,43 @@ function finish(){
   $("btnPause").disabled=true; $("btnPause").textContent="⏸ Pausar"; $("btnFinish").disabled=true;
   $("status").className=""; $("st-msg").textContent="Treino finalizado"; $("st-blk").textContent="—"; $("st-rest").textContent="";
   log("Treino finalizado em "+fmt(elapsed)+".");
-  showResumo();
+  askCliques((doisCliques)=>{ showResumo(doisCliques); });
+}
+
+/* ===================== 2 CLIQUES (RPE + SENSAÇÃO) ===================== */
+let cliqueRPE = null, cliqueSens = null;
+function buildCliques(){
+  const rpe = $("rpeRow"); rpe.innerHTML = "";
+  for(let i=1;i<=10;i++){ const b=document.createElement('button'); b.className='pick'; b.textContent=i;
+    b.onclick=()=>{ cliqueRPE=i; [...rpe.children].forEach(c=>c.classList.remove('sel')); b.classList.add('sel'); checkCliques(); }; rpe.appendChild(b); }
+  const sens = $("sensRow"); sens.innerHTML = "";
+  ["😣","🙁","😐","🙂","😄"].forEach((emo,idx)=>{ const b=document.createElement('button'); b.className='pick'; b.textContent=emo;
+    b.onclick=()=>{ cliqueSens=idx+1; [...sens.children].forEach(c=>c.classList.remove('sel')); b.classList.add('sel'); checkCliques(); }; sens.appendChild(b); });
+}
+function checkCliques(){ $("btnCliquesOk").disabled = !(cliqueRPE && cliqueSens); }
+function askCliques(onDone){
+  cliqueRPE=null; cliqueSens=null; buildCliques(); checkCliques();
+  $("cliques").style.display="block";
+  $("btnCliquesOk").onclick=()=>{ $("cliques").style.display="none"; onDone({rpe:cliqueRPE, sensacao:cliqueSens}); };
 }
 
 /* ===================== RESUMO + EXPORT ===================== */
-function showResumo(){
+function showResumo(doisCliques){
   const hrs=samples.filter(s=>s.hr!=null).map(s=>s.hr);
   const pws=samples.filter(s=>s.power!=null).map(s=>s.power);
   const inFaixa=samples.filter(s=>s.zone==="verde").length;
   const pct = samples.length? Math.round(inFaixa/samples.length*100):0;
   const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):"—";
+  const iso = new Date().toISOString();
+  const status = (elapsed < TOTAL_SEC) ? "parcial" : "normal";
   const data = {
-    treino: WORKOUT.name, data: new Date().toISOString(), duracao_s: elapsed,
-    fc_media: avg(hrs), fc_max: hrs.length?Math.max(...hrs):"—",
-    watts_medio: avg(pws), pct_na_faixa: pct, amostras: samples
+    session_id: genSessionId(iso),
+    user_id: USER_ID,
+    esporte: "indoor_cycling",
+    treino: WORKOUT.name, data: iso, duracao_s: elapsed,
+    fc_media: avg(hrs), fc_max: hrs.length?Math.max(...hrs):null,
+    watts_medio: avg(pws), pct_na_faixa: pct, status: status, amostras: samples,
+    dois_cliques: doisCliques || null,
   };
   $("resumo").style.display="block";
   $("resumo").innerHTML = `<h3>Resumo do treino</h3>
@@ -259,6 +380,8 @@ function showResumo(){
     <button id="btnExport" class="go" style="width:100%;margin-top:10px;">Exportar / Compartilhar</button>
     <textarea id="json" readonly>${JSON.stringify(data)}</textarea>`;
   try{ localStorage.setItem("treino_"+data.data, JSON.stringify(data)); }catch(e){}
+  enqueue(data);          // buffer durável: garante que não se perde
+  sendToPorteiro(data);   // tenta já; se falhar, fica na fila p/ o flush do próximo boot
   $("btnExport").onclick=async()=>{
     const txt=$("json").value;
     if(navigator.share){ try{ await navigator.share({title:"Treino", text:txt}); return; }catch(e){} }
@@ -369,6 +492,73 @@ async function subCSC(srv){
   });
   log("Cadência via CSC (1816) como fallback.");
 }
+
+/* ===================== HISTÓRICO ===================== */
+let histLoaded = false;
+async function loadHistory(force){
+  if(histLoaded && !force) return;
+  $("histList").textContent = "carregando…";
+  try{
+    const r = await fetch(PORTEIRO_URL + "/sessions?user_id=" + USER_ID, { headers:{ "X-Api-Token":API_TOKEN } });
+    if(!r.ok){ $("histList").textContent = "erro "+r.status; return; }
+    const data = await r.json();
+    renderForm(data.pmc);
+    renderList(data.sessions);
+    renderGraph(data.pmc);
+    histLoaded = true;
+  }catch(e){ $("histList").textContent = "falha: "+e.message; }
+}
+function renderForm(pmc){
+  const box = $("formNum").parentElement;
+  if(!pmc || !pmc.length){ $("formNum").textContent="—"; $("formMsg").textContent="sem dados ainda"; return; }
+  const f = pmc[pmc.length-1].form;
+  $("formNum").textContent = (f>0?"+":"") + f;
+  box.classList.remove("fresh","tired","risk");
+  let msg;
+  if(f > 5){ box.classList.add("fresh"); msg="fresco"; }
+  else if(f > -20){ msg="carga produtiva"; }
+  else if(f > -30){ box.classList.add("tired"); msg="fadiga alta"; }
+  else { box.classList.add("risk"); msg="risco — recuperar"; }
+  $("formMsg").textContent = msg + " (Coggan/Friel, adaptado)";
+}
+function renderList(sessions){
+  if(!sessions || !sessions.length){ $("histList").textContent="nenhum treino ainda"; return; }
+  const fmtMin = s => Math.round((s||0)/60)+"min";
+  $("histList").innerHTML = sessions.slice().reverse().map(s=>{
+    const carga = s.carga_tss!=null ? Math.round(s.carga_tss) : "—";
+    const tag = s.metodo_tss==="fc_lthr" ? "hrTSS" : (s.metodo_tss==="potencia" ? "TSS" : "—");
+    return `<div class="histrow"><span>${s.data_local||""} · ${s.esporte||""} · ${fmtMin(s.duracao_s)}</span><span class="tss">${carga} ${tag}</span></div>`;
+  }).join("");
+}
+function renderGraph(pmc){
+  const host = $("histGraph");
+  if(!pmc || pmc.length < 2){ host.innerHTML = '<div class="mut" style="padding:8px 0;">gráfico aparece com 2+ dias</div>'; return; }
+  const W=320, H=140, pad=18;
+  const n = pmc.length;
+  const maxLoad = Math.max(10, ...pmc.map(p=>p.carga));
+  const vals = pmc.flatMap(p=>[p.ctl,p.atl,p.form]);
+  const lo = Math.min(0, ...vals), hi = Math.max(10, ...vals);
+  const x = i => pad + i*(W-2*pad)/(n-1);
+  const yLoad = v => H-pad - (v/maxLoad)*(H-2*pad);
+  const yLine = v => H-pad - ((v-lo)/(hi-lo))*(H-2*pad);
+  const bars = pmc.map((p,i)=>`<rect x="${x(i)-3}" y="${yLoad(p.carga)}" width="6" height="${H-pad-yLoad(p.carga)}" fill="#2f7bff55"/>`).join("");
+  const line = (key,color)=>`<polyline fill="none" stroke="${color}" stroke-width="2" points="${pmc.map((p,i)=>x(i)+','+yLine(p[key])).join(' ')}"/>`;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="background:#0a0d12;border:1px solid var(--bord);border-radius:10px;">
+    ${bars}${line('ctl','#2ea043')}${line('atl','#e5484d')}${line('form','#ffb02e')}
+  </svg>
+  <div class="mut" style="font-size:11px;margin-top:4px;">barras=carga/dia · <span style="color:#2ea043">CTL</span> · <span style="color:#e5484d">ATL</span> · <span style="color:#ffb02e">Form</span></div>`;
+}
+
+/* ===================== TOGGLE DE TELAS ===================== */
+function showView(which){
+  $("viewLive").style.display = which==="live" ? "block" : "none";
+  const vh=$("viewHist"); if(vh) vh.style.display = which==="hist" ? "block" : "none";
+  $("tabLive").classList.toggle("on", which==="live");
+  $("tabHist").classList.toggle("on", which==="hist");
+  if(which==="hist" && typeof loadHistory==='function') loadHistory();
+}
+$("tabLive").onclick=()=>showView("live");
+$("tabHist").onclick=()=>showView("hist");
 </script>
 </body>
 </html>
