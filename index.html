@@ -118,6 +118,11 @@
     <button id="tabHist" class="tab">📊 Histórico</button>
   </div>
   <section id="viewLive">
+  <div id="treino-picker" style="margin:8px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+  <select id="treino-sel" style="flex:1; min-width:160px; padding:8px; border-radius:8px"></select>
+  <button id="btn-carregar" style="padding:8px 12px">Carregar</button>
+  <a id="link-editor" href="editor.html" style="padding:8px 12px; text-decoration:none">+ Novo</a>
+</div>
   <h1 id="wname">Treino ao Vivo</h1>
   <div class="obj" id="wobj"></div>
   <div id="unsupported" class="warn">⚠️ Navegador sem Web Bluetooth. Use <b>Chrome no computador</b> ou <b>Bluefy</b> no iPhone/iPad.</div>
@@ -280,28 +285,87 @@ async function loadConfig(){ // fonte única do FTP: lê do backend; se offline 
   }catch(e){ /* offline -> mantém FTP_APP fallback */ }
 }
 
+const WK_CACHE_KEY = "workout_atual";
+function applyWorkout(w){
+  WORKOUT = w;
+  recomputeWorkoutDerived();
+  $("wname").textContent = WORKOUT.name;
+  $("wobj").textContent  = WORKOUT.objective;
+  buildZones(); buildRibbon();
+}
+async function loadWorkout(treinoId){
+  const tk = getApiToken(false);
+  if(tk && treinoId){
+    try{
+      const r = await fetch(PORTEIRO_URL + "/treinos/" + encodeURIComponent(treinoId), { headers:{ "X-Api-Token":tk } });
+      if(r.ok){
+        const body = await r.json();
+        if(body && body.workout){
+          applyWorkout(body.workout);
+          try{ localStorage.setItem(WK_CACHE_KEY, JSON.stringify(body.workout)); }catch(e){}
+          log("Treino carregado do servidor: "+body.workout.name);
+          return;
+        }
+      }
+      log("⚠️ Treino "+treinoId+" não carregou ("+r.status+") — usando cache/fallback.");
+    }catch(e){ log("⚠️ Sem rede pro treino — usando cache/fallback."); }
+  }
+  try{
+    const cached = JSON.parse(localStorage.getItem(WK_CACHE_KEY) || "null");
+    if(cached && cached.blocks){ applyWorkout(cached); log("Treino do cache local: "+cached.name); return; }
+  }catch(e){}
+  applyWorkout(FALLBACK_WORKOUT);
+  log("Treino fallback embutido.");
+}
+
+async function loadBiblioteca(){
+  const tk = getApiToken(false); if(!tk) return; // sem token: usa fallback/cache, não lista
+  try{
+    const r = await fetch(PORTEIRO_URL + "/treinos?user_id=" + USER_ID, { headers:{ "X-Api-Token":tk } });
+    if(!r.ok) return;
+    const body = await r.json();
+    const sel = $("treino-sel"); if(!sel) return; sel.innerHTML = "";
+    const salvo = localStorage.getItem("treino_sel_id");
+    for(const t of (body.treinos||[])){
+      const o = document.createElement("option");
+      o.value = t.treino_id;
+      o.textContent = (t.de_fabrica ? "★ " : "") + t.nome;
+      if(t.treino_id === salvo) o.selected = true;
+      sel.appendChild(o);
+    }
+  }catch(e){ /* offline: mantém o que tiver */ }
+}
+function ligarPicker(){
+  const btn = $("btn-carregar");
+  if(btn) btn.addEventListener("click", ()=>{
+    const id = $("treino-sel").value;
+    if(!id) return;
+    try{ localStorage.setItem("treino_sel_id", id); }catch(e){}
+    loadWorkout(id);
+  });
+}
+
 /* ===================== TREINO DO DIA ===================== */
-const WORKOUT = {
-  name: "Bike Indoor — Teste geral Z2→Z6 (05/06)",
-  objective: "Treino de TESTE do app: percorre Z2 a Z6 (FTP 180) pra validar fita/cores/balanço. Cadência: FORÇA 60-70 rpm no Z3, giro alto/sprint >85 no Z5/Z6, recuperação >75 na solta. ⚠️ Z5/Z6 são intensos — faça com cautela (é teste, não precisa estourar). FCmáx 174. Só cor, sem som.",
+// Fallback embutido (premortem #2): se nunca carregou nada e está offline, ainda há um treino.
+const FALLBACK_WORKOUT = {
+  name: "Bike Z2 — fallback (offline)",
+  objective: "Treino mínimo embutido. Sem rede/treino salvo: Z2 puro 30min.",
   blocks: [
-    { name:"Aquecimento", min:5, hr:[0,118],     power:[70,95],   cad:[80,90]  },
-    { name:"Z2 endurance",min:5, hr:[104,122],   power:[101,135], cad:[85,95]  },
-    { name:"Z3 força",    min:3, hr:[122,139],   power:[137,162], cad:[60,70]  },
-    { name:"Z4 limiar",   min:3, hr:[139,157],   power:[164,189], cad:[90,100] },
-    { name:"Z5 VO2máx",   min:2, hr:[157,165],   power:[191,216], cad:[95,105] },
-    { name:"Z6 anaeróbio",min:1, hr:[165,174],   power:[218,270], cad:[100,110]},
-    { name:"Solta",       min:4, hr:[0,115],     power:[0,99],    cad:[70,85]  },
+    { name:"Aquecimento", min:8,  hr:[0,116],   power:[0,99],    cad:[80,90] },
+    { name:"Z2 endurance",min:30, hr:[117,141], power:[101,135], cad:[85,95] },
+    { name:"Solta",       min:7,  hr:[0,116],    power:[0,99],    cad:null    },
   ]
 };
-const TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+b.min*60,0);
-// resolução da fita em SEGUNDOS (tempo real; não 1/min, p/ não quebrar HIIT 30s)
-const RIB_STEP = TOTAL_SEC > 2400 ? 10 : 5;   // >40min usa 10s; senão 5s
-const RIB_N = Math.ceil(TOTAL_SEC / RIB_STEP); // nº de células
-// índices de célula que iniciam um novo bloco do treino (separador visual; não depende de FTP)
-const RIB_BLOCKSTART = (()=>{ const set=new Set(); let acc=0; for(const b of WORKOUT.blocks){ if(acc>0) set.add(Math.round(acc/RIB_STEP)); acc+=b.min*60; } return set; })();
-// gabarito: zona-alvo (idx) de cada célula, pelo bloco que cobre seu ponto médio
-// função (não const) p/ recomputar quando o FTP real chega do backend — senão o gabarito fica preso no FTP fallback
+let WORKOUT = FALLBACK_WORKOUT;
+let TOTAL_SEC, RIB_STEP, RIB_N, RIB_BLOCKSTART, RIB_TARGET;
+function recomputeWorkoutDerived(){
+  TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+b.min*60,0);
+  RIB_STEP  = TOTAL_SEC > 2400 ? 10 : 5;
+  RIB_N     = Math.ceil(TOTAL_SEC / RIB_STEP);
+  RIB_BLOCKSTART = (()=>{ const set=new Set(); let acc=0;
+    for(const b of WORKOUT.blocks){ if(acc>0) set.add(Math.round(acc/RIB_STEP)); acc+=b.min*60; } return set; })();
+  RIB_TARGET = buildTarget();
+}
 function buildTarget(){
   return Array.from({length:RIB_N}, (_,s)=>{
     const t = s*RIB_STEP + RIB_STEP/2; let acc=0;
@@ -309,7 +373,7 @@ function buildTarget(){
     return blockZoneIdx(WORKOUT.blocks[WORKOUT.blocks.length-1]);
   });
 }
-let RIB_TARGET = buildTarget();
+recomputeWorkoutDerived();
 
 /* ===================== ESTADO ===================== */
 let hr=null, power=null, cad=null, balL=null;
@@ -328,6 +392,9 @@ if(!navigator.bluetooth){ $("unsupported").style.display="block"; } else { log("
 buildZones();
 buildRibbon();
 loadConfig();  // puxa o FTP de referência do backend (fonte única)
+  loadBiblioteca();
+  ligarPicker();
+  loadWorkout(localStorage.getItem("treino_sel_id") || null);
 flushQueue(); // re-tenta sessões que ficaram na fila (envio falhou antes)
 
 function fmt(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), ss=s%60; return String(m).padStart(2,'0')+":"+String(ss).padStart(2,'0'); }
@@ -337,7 +404,8 @@ function buildZones(){
   const maxMin=Math.max(...WORKOUT.blocks.map(b=>b.min));
   WORKOUT.blocks.forEach((b)=>{
     const pwTxt = (b.power[0]>0 ? b.power[0]+"–"+b.power[1]+"W" : "<"+b.power[1]+"W");
-    const tgt = pwTxt + " · " + b.cad[0]+"–"+b.cad[1]+" rpm";
+    const cadTxt = b.cad ? (" · " + b.cad[0]+"–"+b.cad[1]+" rpm") : "";
+    const tgt = pwTxt + cadTxt;
     const row=document.createElement('div'); row.className='zrow';
     const cor = ZONES[blockZoneIdx(b)].cor;
     row.innerHTML =
@@ -416,9 +484,9 @@ function tickUpdate(){
   $("hr").textContent = hr??"--";
   $("pw").textContent = power??"--";
   $("cad").textContent = cad??"--";
-  $("hr-tgt").textContent = "alvo "+b.hr[0]+"–"+b.hr[1];
-  $("pw-tgt").textContent = "alvo "+b.power[0]+"–"+b.power[1]+"W";
-  $("cad-tgt").textContent = "alvo "+b.cad[0]+"–"+b.cad[1];
+  $("hr-tgt").textContent  = b.hr  ? ("alvo "+b.hr[0]+"–"+b.hr[1]) : "sem alvo de FC";
+  $("pw-tgt").textContent  = "alvo "+b.power[0]+"–"+b.power[1]+"W";
+  $("cad-tgt").textContent = b.cad ? ("alvo "+b.cad[0]+"–"+b.cad[1]) : "livre";
   // barra de FTP: faixa-alvo do bloco + cursor da potência atual (escala 0..FTP_APP*1.5)
   const SCALE = FTP_APP * 1.5;
   const z0 = Math.min(100, b.power[0] / SCALE * 100), z1 = Math.min(100, b.power[1] / SCALE * 100);
@@ -430,8 +498,9 @@ function tickUpdate(){
   } else {
     $("ftplab").textContent = "— % FTP";
   }
-  // semáforo: precisa de FC E watts dentro da faixa (comando "os dois juntos")
-  const hrLow=hr!=null&&hr<b.hr[0], hrHigh=hr!=null&&hr>b.hr[1];
+  // semáforo: FC E watts dentro da faixa. Z6/Z7 (b.hr null) -> só watts manda.
+  const hrLow  = b.hr!=null && hr!=null && hr<b.hr[0];
+  const hrHigh = b.hr!=null && hr!=null && hr>b.hr[1];
   const pwLow=power!=null&&power<b.power[0], pwHigh=power!=null&&power>b.power[1];
   let zone="verde", msg="NA FAIXA ✓";
   if(hr==null&&power==null){ zone="gray"; msg="conecte FC + bike"; }
@@ -440,7 +509,7 @@ function tickUpdate(){
   const st=$("status"); st.className=""; if(zone!=="gray") st.classList.add(zone);
   $("st-blk").textContent = b.name + " · faltam " + fmt(remSec);
   $("st-msg").textContent = msg;
-  $("st-rest").textContent = "FC "+b.hr[0]+"–"+b.hr[1]+" · W "+b.power[0]+"–"+b.power[1];
+  $("st-rest").textContent = (b.hr ? ("FC "+b.hr[0]+"–"+b.hr[1]+" · ") : "") + "W "+b.power[0]+"–"+b.power[1];
   lastZone=zone; // som desativado a pedido — só cor
   // lista de zonas: preenche a barra de cada zona pelo progresso + destaca a ativa
   { const rows=$("zoneList").children; let acc=0;
