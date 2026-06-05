@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLE Scan — Diagnóstico das bikes</title>
+<style>
+  :root{ --bg:#0e1116; --card:#171c24; --bord:#262d38; --txt:#e9eef5; --mut:#8a95a5; --azul:#2f7bff; --verde:#2ea043; --amar:#ffb02e; --verm:#e5484d; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body{ margin:0; background:var(--bg); color:var(--txt); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; padding:14px; }
+  h1{ font-size:18px; margin:0 0 4px; } .sub{ color:var(--mut); font-size:13px; margin-bottom:12px; }
+  button{ background:var(--azul); color:#fff; border:0; border-radius:10px; padding:12px 16px; font-size:15px; font-weight:600; margin:4px 6px 4px 0; cursor:pointer; }
+  button.alt{ background:#2a313c; } button.go{ background:var(--verde); }
+  .row{ display:flex; flex-wrap:wrap; align-items:center; gap:4px; margin-bottom:8px; }
+  #status{ font-size:13px; color:var(--amar); margin:6px 0; min-height:18px; }
+  pre{ background:var(--card); border:1px solid var(--bord); border-radius:10px; padding:10px; font-size:12px; line-height:1.45;
+       white-space:pre-wrap; word-break:break-word; max-height:62vh; overflow:auto; margin-top:10px; }
+  .tag{ display:inline-block; font-size:11px; padding:1px 6px; border-radius:6px; background:#2a313c; color:var(--mut); margin-left:6px; }
+  .hint{ color:var(--mut); font-size:12px; margin-top:8px; }
+</style>
+</head>
+<body>
+<h1>🔬 BLE Scan — diagnóstico das bikes</h1>
+<div class="sub">Use no <b>Chrome do Mac</b>. Conecta na bike, varre TODOS os serviços/características e mostra os bytes ao vivo. Pedale durante a captura. Depois toque em <b>Copiar tudo</b> e mande pro Claude.</div>
+
+<div class="row">
+  <button id="btnAll">Conectar bike (mostrar todas)</button>
+  <button id="btnKeiser" class="alt">Filtrar Keiser (M3i)</button>
+  <button id="btnWatt" class="alt">Filtrar Wattbike</button>
+</div>
+<div class="row">
+  <button id="btnCopy" class="go">📋 Copiar tudo</button>
+  <button id="btnClear" class="alt">Limpar</button>
+  <button id="btnDisc" class="alt">Desconectar</button>
+</div>
+<div id="status">Aguardando…</div>
+<pre id="out">— o relatório aparece aqui —</pre>
+<div class="hint">Dica: após "Conectado", os campos <b>Notify</b> só mostram bytes quando você <b>pedala</b> (a Keiser/Wattbike só transmitem em movimento). Deixe pedalando ~15–20s pra capturar vários pacotes.</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const out=$("out"); let lines=[]; let dev=null; let notifyCounts={};
+function log(s){ lines.push(s); out.textContent=lines.join("\n"); out.scrollTop=out.scrollHeight; }
+function setStatus(s){ $("status").textContent=s; }
+function hex(dv){ let a=[]; for(let i=0;i<dv.byteLength;i++) a.push(dv.getUint8(i).toString(16).padStart(2,"0")); return a.join(" "); }
+const bt=n=>'0000'+n.toString(16).padStart(4,'0')+'-0000-1000-8000-00805f9b34fb';
+
+// Wishlist de serviços (o navegador só deixa enumerar o que está aqui). Padrão fitness + proprietário Wattbike conhecido.
+const SERVICES=[
+  bt(0x1800), bt(0x1801), bt(0x180a), bt(0x180f), bt(0x180d),
+  bt(0x1816), bt(0x1818), bt(0x1826), bt(0x1814), bt(0x183e),
+  'f7461223-d7c1-11e4-9ab1-0002a5d5c51b' // Wattbike proprietário (força/curva de pedalada)
+];
+const NAMES={ '1800':'Generic Access','1801':'Generic Attribute','180a':'Device Information','180f':'Battery',
+  '180d':'Heart Rate','1816':'CSC (cadência/velocidade)','1818':'Cycling Power','1826':'Fitness Machine (FTMS)',
+  '1814':'Running Speed & Cadence','183e':'Physical Activity Monitor',
+  '2a63':'Cycling Power Measurement','2a65':'Cycling Power Feature','2a5b':'CSC Measurement','2a5c':'CSC Feature',
+  '2a5d':'Sensor Location','2ad2':'Indoor Bike Data','2ad6':'Supported Resistance Range','2ad8':'Supported Power Range',
+  '2acc':'Fitness Machine Feature','2a29':'Manufacturer Name','2a24':'Model Number','2a26':'Firmware Rev','2a25':'Serial' };
+const short=u=>{ const m=String(u).match(/^0000([0-9a-f]{4})/); return m?m[1]:String(u); };
+const nm=u=>{ const s=short(u); return NAMES[s]?(NAMES[s]+' ('+s+')'):s; };
+
+function decode(charShort, dv){
+  try{
+    if(charShort==='2ad2'){ // FTMS Indoor Bike Data
+      let o=0, f=dv.getUint16(o,true); o+=2; let r=[];
+      const speed=!(f&0x0001); if(speed){ r.push('vel='+(dv.getUint16(o,true)/100).toFixed(2)+'km/h'); o+=2; }
+      if(f&0x0002){ r.push('velMed'); o+=2; }
+      if(f&0x0004){ r.push('cad='+(dv.getUint16(o,true)/2)+'rpm'); o+=2; }
+      if(f&0x0008){ o+=2; }
+      if(f&0x0010){ o+=3; } if(f&0x0020){ o+=2; }
+      if(f&0x0040){ r.push('POT='+dv.getInt16(o,true)+'W'); o+=2; }
+      return 'FTMS flags=0x'+f.toString(16)+' → '+r.join(' · ');
+    }
+    if(charShort==='2a63'){ // Cycling Power Measurement
+      const f=dv.getUint16(0,true), p=dv.getInt16(2,true); let r=['POT='+p+'W','flags=0x'+f.toString(16)];
+      if(f&0x0001){ r.push('balanço='+(dv.getUint8(4)/2).toFixed(1)+'% (1 perna)'); }
+      return 'CP → '+r.join(' · ');
+    }
+    if(charShort==='2a5b'){ // CSC Measurement
+      const f=dv.getUint8(0); return 'CSC flags=0x'+f.toString(16)+(f&0x02?' (crank presente)':'')+(f&0x01?' (wheel presente)':'');
+    }
+  }catch(e){ return '(decode err: '+e.message+')'; }
+  return '';
+}
+
+async function dump(filterOpts){
+  try{
+    lines=[]; notifyCounts={};
+    setStatus('Abrindo seletor… escolha a bike.');
+    const opts = filterOpts ? {...filterOpts, optionalServices:SERVICES} : {acceptAllDevices:true, optionalServices:SERVICES};
+    dev = await navigator.bluetooth.requestDevice(opts);
+    log('=== DEVICE ===');
+    log('Nome: '+(dev.name||'(sem nome)')+'   id: '+dev.id);
+    dev.addEventListener('gattserverdisconnected',()=>setStatus('Desconectado.'));
+    setStatus('Conectando GATT…');
+    const server = await dev.gatt.connect();
+    const svcs = await server.getPrimaryServices();
+    log('Serviços primários encontrados: '+svcs.length);
+    log('');
+    for(const svc of svcs){
+      log('[SERVICE] '+nm(svc.uuid)+'   ['+svc.uuid+']');
+      let chs=[]; try{ chs=await svc.getCharacteristics(); }catch(e){ log('   (sem characteristics: '+e.message+')'); continue; }
+      for(const ch of chs){
+        const p=ch.properties, props=[];
+        ['read','write','writeWithoutResponse','notify','indicate'].forEach(k=>{ if(p[k]) props.push(k); });
+        log('   • '+nm(ch.uuid)+'   ['+ch.uuid+']   {'+props.join(',')+'}');
+        if(p.read){ try{ const v=await ch.readValue(); const d=decode(short(ch.uuid),v); log('       read: '+hex(v)+(d?'   ⇒ '+d:'')); }catch(e){ log('       read falhou: '+e.message); } }
+        if(p.notify||p.indicate){
+          try{
+            await ch.startNotifications();
+            const key=short(ch.uuid);
+            ch.addEventListener('characteristicvaluechanged',e=>{
+              notifyCounts[key]=(notifyCounts[key]||0)+1;
+              if(notifyCounts[key]<=12){ // captura os primeiros pacotes de cada característica
+                const v=e.target.value, d=decode(key,v);
+                log('       notify#'+notifyCounts[key]+' ['+key+']: '+hex(v)+(d?'   ⇒ '+d:''));
+              } else if(notifyCounts[key]===13){ log('       … ('+key+' continua chegando; PEDALE e observe)'); }
+            });
+            log('       notify: ON ✔ (pedale pra capturar)');
+          }catch(e){ log('       notify falhou: '+e.message); }
+        }
+      }
+      log('');
+    }
+    log('=== FIM DA VARREDURA — agora PEDALE ~15s pra capturar os "notify" ===');
+    setStatus('Conectado ✔ — PEDALE pra capturar os dados, depois "Copiar tudo".');
+  }catch(e){ log('ERRO: '+(e&&e.message?e.message:e)); setStatus('Erro: '+(e&&e.message?e.message:e)); }
+}
+
+$("btnAll").onclick=()=>dump(null);
+$("btnKeiser").onclick=()=>dump({filters:[{namePrefix:'M3i'}]});
+$("btnWatt").onclick=()=>dump({filters:[{namePrefix:'Wattbike'}]});
+$("btnCopy").onclick=async()=>{
+  const txt=lines.join("\n");
+  try{ await navigator.clipboard.writeText(txt); setStatus('Copiado ✔ — cole no chat do Claude.'); }
+  catch(e){ out.focus(); document.getSelection().selectAllChildren(out); document.execCommand&&document.execCommand('copy'); setStatus('Selecionado — Cmd+C pra copiar.'); }
+};
+$("btnClear").onclick=()=>{ lines=[]; notifyCounts={}; out.textContent='— limpo —'; setStatus('Limpo.'); };
+$("btnDisc").onclick=()=>{ try{ dev&&dev.gatt.connected&&dev.gatt.disconnect(); }catch(e){} setStatus('Desconectado.'); };
+
+if(!navigator.bluetooth){ setStatus('⚠️ Este navegador não tem Web Bluetooth. Use o Chrome no Mac.'); }
+else setStatus('Pronto. Clique "Conectar bike" (Chrome do Mac).');
+</script>
+</body>
+</html>
