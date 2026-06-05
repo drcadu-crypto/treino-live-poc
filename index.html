@@ -68,7 +68,7 @@
   /* Equilíbrio das pernas (Wattbike) */
   .balwrap{ background:var(--card); border:1px solid var(--bord); border-radius:12px; padding:10px; margin:8px 0 2px; }
   .balhead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
-  .balsvg{ display:block; height:96px; }
+  .balsvg{ display:block; height:128px; }
 
   .tabs{ display:flex; gap:6px; margin-bottom:10px; }
   .tab{ flex:1; background:#161b22; border:1px solid var(--bord); color:var(--mut); border-radius:12px; padding:10px; font-size:14px; font-weight:700; }
@@ -191,7 +191,7 @@
 
   <div id="balwrap" class="balwrap" style="display:none;">
     <div class="balhead"><span>Equilíbrio das pernas</span><span id="balTxt" class="mut"></span></div>
-    <svg id="balSvg" class="balsvg" viewBox="0 0 120 104" width="100%" preserveAspectRatio="xMidYMid meet"></svg>
+    <svg id="balSvg" class="balsvg" viewBox="0 0 120 140" width="100%" preserveAspectRatio="xMidYMid meet"></svg>
   </div>
   <div class="controls row2" style="margin-top:8px;">
     <button id="btnStart" class="go">▶ Iniciar</button>
@@ -808,13 +808,18 @@ function renderBalance(){
   const L=Math.max(0,Math.min(100,balL)), R=100-L;
   const sym = (L>=45 && L<=55);
   const col = sym ? "var(--verde)" : "var(--verm)";
-  const SC=0.52, cy=52, ry=40;
-  const rxL=Math.max(7,L*SC), rxR=Math.max(7,R*SC);
-  const cxL=Math.max(4,60-rxL), cxR=Math.min(116,60+rxR);
+  // Bolha MAIOR (mais alta) + sensibilidade AMPLIFICADA: a largura cresce com o
+  // DESVIO do 50/50 (ganho), então 42/58 (16 pts) vira diferença visual ~2,5x maior.
+  const cy=70, ry=60;
+  const dev = L - 50;                 // + = esquerda mais forte
+  const BASE = 22, GAIN = 1.5;        // base maior + ganho de sensibilidade
+  const rxL=Math.max(7,Math.min(30, BASE + dev*GAIN));
+  const rxR=Math.max(7,Math.min(30, BASE - dev*GAIN));
+  const cxL=Math.max(2,60-rxL), cxR=Math.min(118,60+rxR);
   $("balSvg").innerHTML =
-    `<line x1="60" y1="6" x2="60" y2="98" stroke="#ffffff44" stroke-width="1"/>`+
-    `<ellipse cx="${cxL.toFixed(1)}" cy="${cy}" rx="${rxL.toFixed(1)}" ry="${ry}" fill="none" stroke="${col}" stroke-width="3"/>`+
-    `<ellipse cx="${cxR.toFixed(1)}" cy="${cy}" rx="${rxR.toFixed(1)}" ry="${ry}" fill="none" stroke="${col}" stroke-width="3"/>`;
+    `<line x1="60" y1="10" x2="60" y2="130" stroke="#ffffff44" stroke-width="1"/>`+
+    `<ellipse cx="${cxL.toFixed(1)}" cy="${cy}" rx="${rxL.toFixed(1)}" ry="${ry}" fill="none" stroke="${col}" stroke-width="4"/>`+
+    `<ellipse cx="${cxR.toFixed(1)}" cy="${cy}" rx="${rxR.toFixed(1)}" ry="${ry}" fill="none" stroke="${col}" stroke-width="4"/>`;
   $("balTxt").innerHTML = `E ${Math.round(L)}% · D ${Math.round(R)}% · ${sym?"simétrico":"assimétrico"}`;
 }
 
