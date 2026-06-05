@@ -680,6 +680,8 @@ function showResumo(doisCliques){
 }
 
 /* ===================== BLUETOOTH ===================== */
+// UUID 128-bit canônico do short 16-bit — Bluefy/iOS não aceita alias ('fitness_machine') NEM número solto (0x1826) em optionalServices; só a forma por extenso
+const bt=n=>'0000'+n.toString(16).padStart(4,'0')+'-0000-1000-8000-00805f9b34fb';
 $("btnHR").onclick=async()=>{
   try{
     log("Procurando FC (ligue Transmitir FC no Epix)...");
@@ -693,7 +695,7 @@ $("btnHR").onclick=async()=>{
 };
 async function connectBike(mode, num){
   try{
-    const bikeSvcs=[0x1818,0x1826,0x1816]; // UUIDs numéricos: Bluefy/iOS não reconhece os aliases 'fitness_machine' etc.
+    const bikeSvcs=[bt(0x1818),bt(0x1826),bt(0x1816)]; // UUID 128-bit por extenso (Bluefy não engole alias nem número solto)
     balL=null; renderBalance(); // reset balanço ao (re)conectar qualquer bike
     let reqOpts;
     if(mode==='keiser'){
@@ -744,7 +746,7 @@ $("btnDisc").onclick=()=>{
   hr=power=cad=null; balL=null; renderBalance(); log("Desconectado FC + Bike.");
 };
 async function subFTMS(srv){
-  const svc=await srv.getPrimaryService(0x1826); const ch=await svc.getCharacteristic(0x2ad2); // FTMS / Indoor Bike Data
+  const svc=await srv.getPrimaryService(bt(0x1826)); const ch=await svc.getCharacteristic(bt(0x2ad2)); // FTMS / Indoor Bike Data
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
     const dv=e.target.value; let o=0; const f=dv.getUint16(o,true); o+=2;
@@ -760,7 +762,7 @@ async function subFTMS(srv){
 }
 let lastCR=null, lastCT=null, lastCCR=null, lastCCT=null, lastPrimaryCadTs=0, gotBikeData=false;
 async function subCP(srv){
-  const svc=await srv.getPrimaryService(0x1818); const ch=await svc.getCharacteristic(0x2a63); // Cycling Power / Measurement
+  const svc=await srv.getPrimaryService(bt(0x1818)); const ch=await svc.getCharacteristic(bt(0x2a63)); // Cycling Power / Measurement
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
     const dv=e.target.value; const flags=dv.getUint16(0,true);
@@ -782,7 +784,7 @@ async function subCP(srv){
 // Só escreve se o caminho primário (FTMS/CP-crank) não estiver entregando cadência (>3s sem dado primário).
 async function subCSC(srv){
   let svc, ch;
-  try{ svc=await srv.getPrimaryService(0x1816); ch=await svc.getCharacteristic(0x2a5b); } // CSC / Measurement
+  try{ svc=await srv.getPrimaryService(bt(0x1816)); ch=await svc.getCharacteristic(bt(0x2a5b)); } // CSC / Measurement
   catch(e){ log("CSC indisponível: "+e.message); return; }
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
