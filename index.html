@@ -690,7 +690,7 @@ $("btnHR").onclick=async()=>{
 };
 async function connectBike(mode, num){
   try{
-    const bikeSvcs=['cycling_power','fitness_machine','cycling_speed_and_cadence'];
+    const bikeSvcs=[0x1818,0x1826,0x1816]; // UUIDs numéricos: Bluefy/iOS não reconhece os aliases 'fitness_machine' etc.
     balL=null; renderBalance(); // reset balanço ao (re)conectar qualquer bike
     let reqOpts;
     if(mode==='keiser'){
@@ -740,7 +740,7 @@ $("btnDisc").onclick=()=>{
   hr=power=cad=null; balL=null; renderBalance(); log("Desconectado FC + Bike.");
 };
 async function subFTMS(srv){
-  const svc=await srv.getPrimaryService('fitness_machine'); const ch=await svc.getCharacteristic('indoor_bike_data');
+  const svc=await srv.getPrimaryService(0x1826); const ch=await svc.getCharacteristic(0x2ad2); // FTMS / Indoor Bike Data
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
     const dv=e.target.value; let o=0; const f=dv.getUint16(o,true); o+=2;
@@ -756,7 +756,7 @@ async function subFTMS(srv){
 }
 let lastCR=null, lastCT=null, lastCCR=null, lastCCT=null, lastPrimaryCadTs=0, gotBikeData=false;
 async function subCP(srv){
-  const svc=await srv.getPrimaryService('cycling_power'); const ch=await svc.getCharacteristic('cycling_power_measurement');
+  const svc=await srv.getPrimaryService(0x1818); const ch=await svc.getCharacteristic(0x2a63); // Cycling Power / Measurement
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
     const dv=e.target.value; const flags=dv.getUint16(0,true);
@@ -778,7 +778,7 @@ async function subCP(srv){
 // Só escreve se o caminho primário (FTMS/CP-crank) não estiver entregando cadência (>3s sem dado primário).
 async function subCSC(srv){
   let svc, ch;
-  try{ svc=await srv.getPrimaryService('cycling_speed_and_cadence'); ch=await svc.getCharacteristic('csc_measurement'); }
+  try{ svc=await srv.getPrimaryService(0x1816); ch=await svc.getCharacteristic(0x2a5b); } // CSC / Measurement
   catch(e){ log("CSC indisponível: "+e.message); return; }
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
