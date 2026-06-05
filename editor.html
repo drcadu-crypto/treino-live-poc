@@ -12,6 +12,7 @@
   .falta{ font-weight:600; }
   .ok{ color:#2ea043; } .warn{ color:#ffd23f; }
   button.primary{ background:#2ea043; border-color:#2ea043; }
+  button.del{ background:#3a1f24; border-color:#e5484d; color:#ff9ea3; }
 </style>
 </head>
 <body>
@@ -48,9 +49,11 @@ function getApiToken(){ let t=""; try{t=localStorage.getItem(TOKEN_KEY)||"";}cat
   if(!t){ t=(prompt("Senha do app (token do Porteiro):")||"").trim(); if(t){try{localStorage.setItem(TOKEN_KEY,t);}catch(e){}} } return t; }
 
 let blocos = [];
-function addBloco(b){ blocos.push(b || {zona:"Z2", min:5, cadOn:false, cadLo:85, cadHi:95}); render(); }
+function addBloco(b){ blocos.push(b || {zona:"Z2", min:5, seg:0, cadOn:false, cadLo:85, cadHi:95}); render(); }
 function delBloco(i){ blocos.splice(i,1); render(); }
-function somaMin(){ return blocos.reduce((s,b)=>s+(parseInt(b.min)||0),0); }
+function blocoSec(b){ return (parseInt(b.min)||0)*60 + (parseInt(b.seg)||0); }   // duração do bloco em segundos
+function somaSec(){ return blocos.reduce((s,b)=>s+blocoSec(b),0); }
+function fmtDur(s){ const m=Math.floor(s/60), x=s%60; return m ? (x? m+"min "+x+"s" : m+"min") : x+"s"; }
 
 function render(){
   const wrap = $("blocos"); wrap.innerHTML = "";
@@ -58,8 +61,9 @@ function render(){
     const d = document.createElement("div"); d.className="blk";
     d.innerHTML = `<div class="row">
         <select data-k="zona" data-i="${i}" style="flex:1">${ZONAS.map(o=>`<option value="${o.z}" ${o.z===b.zona?"selected":""}>${o.z} – ${o.nome}</option>`).join("")}</select>
-        <input type="number" min="1" value="${b.min}" data-k="min" data-i="${i}" style="width:70px"> min
-        <button data-del="${i}">×</button>
+        <input type="number" min="0" value="${b.min}" data-k="min" data-i="${i}" style="width:54px"> min
+        <input type="number" min="0" max="59" value="${b.seg||0}" data-k="seg" data-i="${i}" style="width:54px"> seg
+        <button data-del="${i}" class="del">✕ remover</button>
       </div>
       <div class="row">
         <label><input type="checkbox" data-k="cadOn" data-i="${i}" ${b.cadOn?"checked":""}> cadência</label>
@@ -81,18 +85,18 @@ function render(){
   atualizaFalta();
 }
 function atualizaFalta(){
-  const total = parseInt($("total").value)||0, soma = somaMin(), falta = total - soma;
+  const alvo = (parseInt($("total").value)||0)*60, soma = somaSec(), falta = alvo - soma;
   const el = $("falta");
-  if(falta>0){ el.textContent = `faltam ${falta} min`; el.className="falta warn"; }
+  if(falta>0){ el.textContent = `faltam ${fmtDur(falta)}`; el.className="falta warn"; }
   else if(falta===0){ el.textContent = "✓ fechado"; el.className="falta ok"; }
-  else { el.textContent = `passou ${-falta} min`; el.className="falta warn"; }
+  else { el.textContent = `passou ${fmtDur(-falta)}`; el.className="falta warn"; }
 }
 function toJSON(){
   return {
     nome: $("nome").value.trim(),
     objetivo: $("objetivo").value.trim(),
     modalidade: "bike", origem: "manual",
-    blocos: blocos.map(b=>({ nome:nomeDaZona(b.zona), min:parseInt(b.min)||0, zona:b.zona,
+    blocos: blocos.map(b=>({ nome:nomeDaZona(b.zona), dur_s:blocoSec(b), zona:b.zona,
                              cad: b.cadOn ? [parseInt(b.cadLo)||0, parseInt(b.cadHi)||0] : null })),
   };
 }
@@ -102,6 +106,7 @@ $("salvar").addEventListener("click", async ()=>{
   const body = toJSON();
   if(!body.nome){ $("msg").textContent="⚠️ dê um nome ao treino."; return; }
   if(!body.blocos.length){ $("msg").textContent="⚠️ adicione ao menos 1 bloco."; return; }
+  if(body.blocos.some(b=>!b.dur_s || b.dur_s<=0)){ $("msg").textContent="⚠️ todo bloco precisa de duração maior que zero (min e/ou seg)."; return; }
   try{
     const r = await fetch(PORTEIRO_URL + "/treinos", { method:"POST",
       headers:{ "Content-Type":"application/json", "X-User-Id":USER_ID, "X-Api-Token":getApiToken() },
@@ -111,9 +116,10 @@ $("salvar").addEventListener("click", async ()=>{
   }catch(e){ $("msg").textContent = "⚠️ sem rede: "+e.message; }
 });
 
-// começa com aquecimento (Z1) + endurance (Z2)
-addBloco({zona:"Z1", min:8, cadOn:true, cadLo:80, cadHi:90});
-addBloco({zona:"Z2", min:30, cadOn:true, cadLo:85, cadHi:95});
+// começa com aquecimento (Z1) + endurance (Z2) + 1 tiro Z7 30s (exemplo de segundos)
+addBloco({zona:"Z1", min:8,  seg:0,  cadOn:true,  cadLo:80,  cadHi:90});
+addBloco({zona:"Z2", min:30, seg:0,  cadOn:true,  cadLo:85,  cadHi:95});
+addBloco({zona:"Z7", min:0,  seg:30, cadOn:false, cadLo:100, cadHi:110});
 </script>
 </body>
 </html>

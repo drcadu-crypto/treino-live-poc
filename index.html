@@ -369,19 +369,22 @@ const FALLBACK_WORKOUT = {
   ]
 };
 let WORKOUT = FALLBACK_WORKOUT;
+// duração do bloco em segundos: dur_s (novo, suporta tiros <1min) ou min*60 (compat)
+function blkSec(b){ return b.dur_s!=null ? b.dur_s : (b.min||0)*60; }
+function fmtDur(s){ const m=Math.floor(s/60), x=s%60; return m ? (x? m+"′"+String(x).padStart(2,"0")+"″" : m+"′") : x+"″"; }
 let TOTAL_SEC, RIB_STEP, RIB_N, RIB_BLOCKSTART, RIB_TARGET;
 function recomputeWorkoutDerived(){
-  TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+b.min*60,0);
+  TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+blkSec(b),0);
   RIB_STEP  = TOTAL_SEC > 2400 ? 10 : 5;
   RIB_N     = Math.ceil(TOTAL_SEC / RIB_STEP);
   RIB_BLOCKSTART = (()=>{ const set=new Set(); let acc=0;
-    for(const b of WORKOUT.blocks){ if(acc>0) set.add(Math.round(acc/RIB_STEP)); acc+=b.min*60; } return set; })();
+    for(const b of WORKOUT.blocks){ if(acc>0) set.add(Math.round(acc/RIB_STEP)); acc+=blkSec(b); } return set; })();
   RIB_TARGET = buildTarget();
 }
 function buildTarget(){
   return Array.from({length:RIB_N}, (_,s)=>{
     const t = s*RIB_STEP + RIB_STEP/2; let acc=0;
-    for(const b of WORKOUT.blocks){ if(t < acc+b.min*60) return blockZoneIdx(b); acc+=b.min*60; }
+    for(const b of WORKOUT.blocks){ if(t < acc+blkSec(b)) return blockZoneIdx(b); acc+=blkSec(b); }
     return blockZoneIdx(WORKOUT.blocks[WORKOUT.blocks.length-1]);
   });
 }
@@ -413,7 +416,7 @@ function fmt(s){ s=Math.max(0,Math.round(s)); const m=Math.floor(s/60), ss=s%60;
 
 function buildZones(){
   const host=$("zoneList"); if(!host) return; host.innerHTML=""; zoneFills.length=0;
-  const maxMin=Math.max(...WORKOUT.blocks.map(b=>b.min));
+  const maxSec=Math.max(...WORKOUT.blocks.map(b=>blkSec(b)));
   WORKOUT.blocks.forEach((b)=>{
     const pwTxt = (b.power[0]>0 ? b.power[0]+"–"+b.power[1]+"W" : "<"+b.power[1]+"W");
     const cadTxt = b.cad ? (" · " + b.cad[0]+"–"+b.cad[1]+" rpm") : "";
@@ -423,9 +426,9 @@ function buildZones(){
     row.innerHTML =
       `<span class="zdot" style="background:${cor}"></span>`+
       `<div class="zmain">`+
-        `<div class="ztop"><span class="zname">${b.name}</span><span class="zmin">${b.min}′</span></div>`+
+        `<div class="ztop"><span class="zname">${b.name}</span><span class="zmin">${fmtDur(blkSec(b))}</span></div>`+
         `<div class="ztgt">${tgt}</div>`+
-        `<div class="zbarwrap"><div class="zbar" style="width:${(b.min/maxMin*100).toFixed(1)}%;background:${cor}33"><i style="background:${cor}"></i></div></div>`+
+        `<div class="zbarwrap"><div class="zbar" style="width:${(blkSec(b)/maxSec*100).toFixed(1)}%;background:${cor}33"><i style="background:${cor}"></i></div></div>`+
       `</div>`;
     host.appendChild(row);
     zoneFills.push(row.querySelector('.zbar i')); // cache do preenchimento p/ o tick
@@ -434,8 +437,8 @@ function buildZones(){
 
 function currentBlock(){
   let acc=0;
-  for(const b of WORKOUT.blocks){ if(elapsed < acc+b.min*60) return {b, inSec: elapsed-acc, remSec: acc+b.min*60-elapsed}; acc+=b.min*60; }
-  const last=WORKOUT.blocks[WORKOUT.blocks.length-1]; return {b:last, inSec:last.min*60, remSec:0};
+  for(const b of WORKOUT.blocks){ if(elapsed < acc+blkSec(b)) return {b, inSec: elapsed-acc, remSec: acc+blkSec(b)-elapsed}; acc+=blkSec(b); }
+  const last=WORKOUT.blocks[WORKOUT.blocks.length-1]; return {b:last, inSec:blkSec(last), remSec:0};
 }
 
 /* ===================== FITA DE ADERÊNCIA ===================== */
@@ -526,7 +529,7 @@ function tickUpdate(){
   // lista de zonas: preenche a barra de cada zona pelo progresso + destaca a ativa
   { const rows=$("zoneList").children; let acc=0;
     for(let k=0;k<WORKOUT.blocks.length;k++){
-      const dur=WORKOUT.blocks[k].min*60, start=acc; acc+=dur;
+      const dur=blkSec(WORKOUT.blocks[k]), start=acc; acc+=dur;
       const pf = elapsed<=start ? 0 : (elapsed>=acc ? 100 : (elapsed-start)/dur*100);
       const fill = zoneFills[k]; // cacheado em buildZones
       if(fill) fill.style.width = pf.toFixed(1) + "%";
