@@ -110,11 +110,22 @@
   .formbig.fresh .num{ color:var(--verde); } .formbig.tired .num{ color:var(--amar); } .formbig.risk .num{ color:var(--verm); }
   .histrow{ display:flex; justify-content:space-between; padding:8px 0; border-bottom:1px solid #20262f; font-size:13px; }
   .histrow .tss{ font-weight:700; }
+
+  .tcard{ background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:12px; margin-bottom:10px; }
+  .tcard h4{ margin:0 0 2px; font-size:15px; }
+  .tcard .obj{ color:var(--mut); font-size:12px; margin-bottom:8px; }
+  .tcard .resumo{ color:var(--mut); font-size:12px; margin:6px 0; }
+  .tfita{ display:flex; height:14px; border-radius:7px; overflow:hidden; margin:6px 0; }
+  .tfita i{ display:block; height:100%; }
+  .tcard .acts{ display:flex; gap:8px; margin-top:8px; }
+  .tcard .acts button{ flex:1; padding:8px; border-radius:10px; border:1px solid var(--bord); background:#161b22; color:var(--txt); font-weight:700; }
+  .tcard .acts .go{ background:var(--azul); border-color:var(--azul); }
 </style>
 </head>
 <body>
   <div class="tabs">
     <button id="tabLive" class="tab on">🚴 Ao Vivo</button>
+    <button id="tabTreinos" class="tab">🗂 Treinos</button>
     <button id="tabHist" class="tab">📊 Histórico</button>
   </div>
   <section id="viewLive">
@@ -199,6 +210,30 @@
     <summary>Diagnóstico</summary>
     <pre id="log"></pre>
   </details>
+  </section>
+
+  <section id="viewTreinos" style="display:none;">
+    <!-- MODO LISTA -->
+    <div id="trLista">
+      <div class="row" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <strong>Meus Treinos</strong>
+        <button id="trNovo" class="tab" style="flex:0 0 auto;padding:8px 12px">+ Novo treino</button>
+      </div>
+      <div id="trCards" class="mut">carregando…</div>
+    </div>
+    <!-- MODO CONSTRUTOR -->
+    <div id="trBuilder" style="display:none">
+      <div class="row" style="margin:4px 0"><input id="trNome" placeholder="Nome do treino" style="flex:1;padding:8px;border-radius:8px"></div>
+      <div class="row" style="margin:4px 0"><input id="trObjetivo" placeholder="Objetivo (opcional)" style="flex:1;padding:8px;border-radius:8px"></div>
+      <div class="row" style="margin:4px 0">Tempo total (min): <input id="trTotal" type="number" min="1" value="45" style="width:80px;padding:8px;border-radius:8px"> <span id="edFalta"></span></div>
+      <div id="edBlocosWrap"></div>
+      <div class="row" style="gap:8px;margin-top:8px">
+        <button id="edAdd" class="tab" style="flex:0 0 auto;padding:8px 12px">+ bloco</button>
+        <button id="edSalvar" class="tab on" style="flex:0 0 auto;padding:8px 12px">Salvar treino</button>
+        <button id="edVoltar" class="tab" style="flex:0 0 auto;padding:8px 12px">voltar</button>
+      </div>
+      <div id="edMsg" style="margin-top:8px"></div>
+    </div>
   </section>
 
   <section id="viewHist" style="display:none;">
@@ -841,12 +876,154 @@ function renderGraph(pmc){
 function showView(which){
   $("viewLive").style.display = which==="live" ? "block" : "none";
   const vh=$("viewHist"); if(vh) vh.style.display = which==="hist" ? "block" : "none";
+  const vt=$("viewTreinos"); if(vt) vt.style.display = which==="treinos" ? "block" : "none";
   $("tabLive").classList.toggle("on", which==="live");
   $("tabHist").classList.toggle("on", which==="hist");
+  $("tabTreinos").classList.toggle("on", which==="treinos");
   if(which==="hist" && typeof loadHistory==='function') loadHistory();
+  if(which==="treinos") loadCards();
 }
 $("tabLive").onclick=()=>showView("live");
 $("tabHist").onclick=()=>showView("hist");
+
+/* ===================== ABA MEUS TREINOS ===================== */
+const ZONA_NOMES = [
+  {z:"Z1",nome:"Recuperação Ativa"},{z:"Z2",nome:"Endurance"},{z:"Z3",nome:"Ritmo (Tempo)"},
+  {z:"Z4",nome:"Limiar de Lactato"},{z:"Z5",nome:"VO2 Máximo"},{z:"Z6",nome:"Capacidade Anaeróbia"},
+  {z:"Z7",nome:"Potência Neuromuscular"},
+];
+function nomeDaZona(z){ const f=ZONA_NOMES.find(x=>x.z===z); return f?f.nome:z; }
+function corDaZona(z){ const f=ZONES.find(x=>x.k===z); return f?f.cor:"#5b6b7a"; }
+function edBlocoSecRaw(b){ return b.dur_s!=null ? b.dur_s : (b.min||0)*60; } // bloco cru do servidor
+
+let edBlocos = [];          // estado do construtor: {zona,min,seg,cadOn,cadLo,cadHi}
+let edTreinoId = null;      // id em edição (null = novo)
+
+function trShow(modo){ // "lista" | "builder"
+  $("trLista").style.display   = modo==="lista" ? "block" : "none";
+  $("trBuilder").style.display = modo==="builder" ? "block" : "none";
+}
+
+async function loadCards(){
+  const tk = getApiToken(false);
+  const box = $("trCards");
+  if(!tk){ box.innerHTML = '<div class="mut">🔑 abra o Histórico ou envie um treino uma vez p/ liberar a senha, e volte aqui.</div>'; return; }
+  box.textContent = "carregando…";
+  try{
+    const r = await fetch(PORTEIRO_URL + "/treinos?user_id=" + USER_ID, { headers:{ "X-Api-Token":tk } });
+    if(!r.ok){ box.textContent = "erro "+r.status; return; }
+    const body = await r.json();
+    const lista = body.treinos || [];
+    if(!lista.length){ box.innerHTML = '<div class="mut">nenhum treino ainda — toque em "+ Novo treino".</div>'; return; }
+    box.innerHTML = "";
+    for(const t of lista){
+      const blocos = t.blocos || [];
+      const tot = blocos.reduce((s,b)=>s+edBlocoSecRaw(b),0);
+      const fita = blocos.map(b=>`<i style="background:${corDaZona(b.zona)};width:${tot? (edBlocoSecRaw(b)/tot*100):0}%"></i>`).join("");
+      const card = document.createElement("div"); card.className="tcard";
+      const acaoEditar = t.de_fabrica
+        ? `<button data-base="${t.treino_id}">Usar de base</button>`
+        : `<button data-edit="${t.treino_id}">✎ Editar</button>`;
+      card.innerHTML =
+        `<h4>${t.de_fabrica?"★ ":""}${t.nome}</h4>`+
+        `<div class="obj">${t.objetivo||""}</div>`+
+        `<div class="tfita">${fita}</div>`+
+        `<div class="resumo">${fmtDur(tot)} · ${blocos.length} blocos</div>`+
+        `<div class="acts"><button class="go" data-fazer="${t.treino_id}">▶ Fazer</button>${acaoEditar}</div>`;
+      box.appendChild(card);
+    }
+    box.querySelectorAll("[data-fazer]").forEach(el=>el.addEventListener("click",e=>edFazer(e.target.dataset.fazer)));
+    box.querySelectorAll("[data-edit]").forEach(el=>el.addEventListener("click",e=>edAbrirEdicao(e.target.dataset.edit,false)));
+    box.querySelectorAll("[data-base]").forEach(el=>el.addEventListener("click",e=>edAbrirEdicao(e.target.dataset.base,true)));
+  }catch(e){ box.textContent = "falha: "+e.message; }
+}
+
+function edFazer(id){
+  try{ localStorage.setItem("treino_sel_id", id); }catch(e){}
+  showView("live");
+  loadWorkout(id);
+}
+
+async function edAbrirEdicao(id, comoNovo){
+  const tk = getApiToken(true); if(!tk) return;
+  try{
+    const r = await fetch(PORTEIRO_URL + "/treinos/" + encodeURIComponent(id), { headers:{ "X-Api-Token":tk } });
+    if(!r.ok){ $("edMsg").textContent = "erro ao carregar ("+r.status+")"; trShow("builder"); return; }
+    const t = await r.json();
+    edTreinoId = comoNovo ? null : t.treino_id;
+    $("trNome").value = comoNovo ? (t.nome + " (cópia)") : t.nome;
+    $("trObjetivo").value = t.objetivo || "";
+    edBlocos = (t.blocos||[]).map(b=>{ const s=edBlocoSecRaw(b); return {
+      zona: b.zona, min: Math.floor(s/60), seg: s%60,
+      cadOn: Array.isArray(b.cad), cadLo: (b.cad&&b.cad[0])||85, cadHi: (b.cad&&b.cad[1])||95 }; });
+    const tot = edBlocos.reduce((s,b)=>s+b.min*60+b.seg,0);
+    $("trTotal").value = Math.max(1, Math.round(tot/60));
+    edRender(); $("edMsg").textContent=""; trShow("builder");
+  }catch(e){ $("edMsg").textContent = "falha: "+e.message; }
+}
+
+function edNovo(){
+  edTreinoId=null; $("trNome").value=""; $("trObjetivo").value=""; $("trTotal").value=45;
+  edBlocos=[{zona:"Z1",min:8,seg:0,cadOn:true,cadLo:80,cadHi:90},{zona:"Z2",min:30,seg:0,cadOn:true,cadLo:85,cadHi:95}];
+  edRender(); $("edMsg").textContent=""; trShow("builder");
+}
+
+function edSomaSec(){ return edBlocos.reduce((s,b)=>s+(parseInt(b.min)||0)*60+(parseInt(b.seg)||0),0); }
+function edAtualizaFalta(){
+  const alvo=(parseInt($("trTotal").value)||0)*60, soma=edSomaSec(), falta=alvo-soma, el=$("edFalta");
+  el.textContent = falta>0 ? ("faltam "+fmtDur(falta)) : (falta===0 ? "✓ fechado" : ("passou "+fmtDur(-falta)));
+}
+function edRender(){
+  const wrap=$("edBlocosWrap"); wrap.innerHTML="";
+  edBlocos.forEach((b,i)=>{
+    const d=document.createElement("div"); d.className="blk"; d.style.cssText="border:1px solid var(--bord);border-radius:10px;padding:8px;margin:6px 0";
+    d.innerHTML = `<div class="row" style="gap:6px;align-items:center;flex-wrap:wrap">
+        <select data-k="zona" data-i="${i}" style="flex:1;padding:8px;border-radius:8px">${ZONA_NOMES.map(o=>`<option value="${o.z}" ${o.z===b.zona?"selected":""}>${o.z} – ${o.nome}</option>`).join("")}</select>
+        <input type="number" min="0" value="${b.min}" data-k="min" data-i="${i}" style="width:50px;padding:8px;border-radius:8px"> min
+        <input type="number" min="0" max="59" value="${b.seg||0}" data-k="seg" data-i="${i}" style="width:50px;padding:8px;border-radius:8px"> seg
+        <button data-del="${i}" style="background:#3a1f24;border:1px solid #e5484d;color:#ff9ea3;border-radius:8px;padding:8px">✕</button>
+      </div>
+      <div class="row" style="gap:6px;align-items:center;margin-top:4px">
+        <label><input type="checkbox" data-k="cadOn" data-i="${i}" ${b.cadOn?"checked":""}> cadência</label>
+        <input type="number" value="${b.cadLo}" data-k="cadLo" data-i="${i}" style="width:54px;padding:8px;border-radius:8px" ${b.cadOn?"":"disabled"}>–
+        <input type="number" value="${b.cadHi}" data-k="cadHi" data-i="${i}" style="width:54px;padding:8px;border-radius:8px" ${b.cadOn?"":"disabled"}> rpm
+      </div>`;
+    wrap.appendChild(d);
+  });
+  wrap.querySelectorAll("[data-k]").forEach(el=>el.addEventListener("input",e=>{
+    const i=+e.target.dataset.i,k=e.target.dataset.k;
+    edBlocos[i][k]=(e.target.type==="checkbox")?e.target.checked:(e.target.type==="number"?+e.target.value:e.target.value);
+    if(k==="cadOn") edRender();
+    edAtualizaFalta();
+  }));
+  wrap.querySelectorAll("[data-del]").forEach(el=>el.addEventListener("click",e=>{ edBlocos.splice(+e.target.dataset.del,1); edRender(); }));
+  edAtualizaFalta();
+}
+function edToJSON(){
+  return { nome:$("trNome").value.trim(), objetivo:$("trObjetivo").value.trim(), modalidade:"bike", origem:"manual",
+    treino_id: edTreinoId || undefined,
+    blocos: edBlocos.map(b=>({ nome:nomeDaZona(b.zona), zona:b.zona,
+      dur_s:(parseInt(b.min)||0)*60+(parseInt(b.seg)||0), cad: b.cadOn?[parseInt(b.cadLo)||0,parseInt(b.cadHi)||0]:null })) };
+}
+async function edSalvar(){
+  const body=edToJSON();
+  if(!body.nome){ $("edMsg").textContent="⚠️ dê um nome ao treino."; return; }
+  if(!body.blocos.length){ $("edMsg").textContent="⚠️ adicione ao menos 1 bloco."; return; }
+  if(body.blocos.some(b=>!b.dur_s||b.dur_s<=0)){ $("edMsg").textContent="⚠️ todo bloco precisa de duração > 0."; return; }
+  try{
+    const r=await fetch(PORTEIRO_URL+"/treinos",{method:"POST",
+      headers:{"Content-Type":"application/json","X-User-Id":USER_ID,"X-Api-Token":getApiToken(true)},
+      body:JSON.stringify(body)});
+    if(r.ok){ $("edMsg").textContent="✓ treino salvo!"; trShow("lista"); loadCards(); }
+    else { const j=await r.json().catch(()=>({})); $("edMsg").textContent="⚠️ erro "+r.status+": "+(j.error||""); }
+  }catch(e){ $("edMsg").textContent="⚠️ sem rede: "+e.message; }
+}
+$("trNovo").addEventListener("click", edNovo);
+$("edAdd").addEventListener("click", ()=>{ edBlocos.push({zona:"Z2",min:5,seg:0,cadOn:false,cadLo:85,cadHi:95}); edRender(); });
+$("edSalvar").addEventListener("click", edSalvar);
+$("edVoltar").addEventListener("click", ()=>{ trShow("lista"); });
+$("trTotal").addEventListener("input", edAtualizaFalta);
+$("tabTreinos").onclick=()=>showView("treinos");
 </script>
 </body>
 </html>
