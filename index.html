@@ -130,6 +130,7 @@
     <button id="tabLive" class="tab on">🚴 Ao Vivo</button>
     <button id="tabTreinos" class="tab">🗂 Treinos</button>
     <button id="tabHist" class="tab">📊 Histórico</button>
+    <button id="tabRegistrar" class="tab">✍️ Registrar</button>
   </div>
   <section id="viewLive">
   <div id="treino-picker" style="margin:8px 0; display:flex; gap:8px; align-items:center; flex-wrap:wrap">
@@ -193,6 +194,11 @@
     <div class="balhead"><span>Equilíbrio das pernas</span><span id="balTxt" class="mut"></span></div>
     <svg id="balSvg" class="balsvg" viewBox="0 0 120 140" width="100%" preserveAspectRatio="xMidYMid meet"></svg>
   </div>
+
+  <div id="polarwrap" class="balwrap" style="display:none;">
+    <div class="balhead"><span>Pedalada (força × ângulo)</span><span id="polarTxt" class="mut"></span></div>
+    <svg id="polarSvg" class="balsvg" viewBox="0 0 140 140" width="100%" preserveAspectRatio="xMidYMid meet" style="height:170px;"></svg>
+  </div>
   <div class="controls row2" style="margin-top:8px;">
     <button id="btnStart" class="go">▶ Iniciar</button>
     <button id="btnPause" class="pause" disabled>⏸ Pausar</button>
@@ -244,6 +250,30 @@
     <div id="histGraph"></div>
     <h3 style="font-size:14px;margin:14px 0 6px;">Treinos</h3>
     <div id="histList" class="mut">carregando…</div>
+  </section>
+
+  <section id="viewRegistrar" style="display:none;">
+    <div class="riblegend" style="margin-bottom:8px;">Registre um treino que você fez <b>fora do app</b> (pedalou sem conectar, musculação, corrida na rua). A carga é estimada pela FC média (se você tiver) ou pelo seu esforço.</div>
+    <label class="mut">Modalidade</label>
+    <div class="biketabs" id="regModal">
+      <button type="button" class="btab on" data-mod="bike">🚴 Bike</button>
+      <button type="button" class="btab" data-mod="forca">🏋️ Força</button>
+      <button type="button" class="btab" data-mod="corrida">🏃 Corrida</button>
+    </div>
+    <label class="mut">Data</label>
+    <input id="regData" type="date" style="width:100%;padding:10px;margin:4px 0 8px;background:#161b22;border:1px solid var(--bord);border-radius:10px;color:var(--txt);box-sizing:border-box;">
+    <label class="mut">Duração (min)</label>
+    <input id="regDur" type="number" min="1" inputmode="numeric" placeholder="ex. 45" style="width:100%;padding:10px;margin:4px 0 8px;background:#161b22;border:1px solid var(--bord);border-radius:10px;color:var(--txt);box-sizing:border-box;">
+    <label class="mut">Esforço (0 = leve · 10 = máximo)</label>
+    <input id="regRpe" type="number" min="0" max="10" inputmode="numeric" placeholder="0–10" style="width:100%;padding:10px;margin:4px 0 8px;background:#161b22;border:1px solid var(--bord);border-radius:10px;color:var(--txt);box-sizing:border-box;">
+    <div id="regFcWrap">
+      <label class="mut">FC média (bpm) — opcional, se o relógio mediu</label>
+      <input id="regFc" type="number" min="30" max="220" inputmode="numeric" placeholder="ex. 138" style="width:100%;padding:10px;margin:4px 0 8px;background:#161b22;border:1px solid var(--bord);border-radius:10px;color:var(--txt);box-sizing:border-box;">
+    </div>
+    <label class="mut">Nome (opcional)</label>
+    <input id="regNome" type="text" placeholder="ex. Pedal base" style="width:100%;padding:10px;margin:4px 0 8px;background:#161b22;border:1px solid var(--bord);border-radius:10px;color:var(--txt);box-sizing:border-box;">
+    <button id="regSalvar" class="tab on" style="width:100%;margin-top:8px;">Salvar treino</button>
+    <div id="regMsg" class="mut" style="margin-top:8px;"></div>
   </section>
 
 <script>
@@ -430,6 +460,17 @@ recomputeWorkoutDerived();
 
 /* ===================== ESTADO ===================== */
 let hr=null, power=null, cad=null, balL=null;
+// Suavização do balanço E/D: a Wattbike manda o valor CRU de cada pedalada (pula
+// 44↔54% facilmente). Guardamos as amostras dos últimos BAL_WIN_MS e mostramos a
+// MÉDIA (tendência), como velocímetro — estável, sem tremer. Ajuste a janela aqui.
+let balSamples=[]; const BAL_WIN_MS=6000;
+function pushBal(v){
+  const now=Date.now();
+  balSamples.push({t:now,v});
+  while(balSamples.length && now-balSamples[0].t>BAL_WIN_MS) balSamples.shift();
+  let s=0; for(const x of balSamples) s+=x.v;
+  balL = balSamples.length ? s/balSamples.length : null;
+}
 let hrDev=null, bikeDev=null;
 let running=false, paused=false, elapsed=0, tickTimer=null;
 let lastZone=null;                // p/ disparar som só na transição
@@ -695,8 +736,8 @@ $("btnHR").onclick=async()=>{
 };
 async function connectBike(mode, num){
   try{
-    const bikeSvcs=[bt(0x1818),bt(0x1826),bt(0x1816)]; // UUID 128-bit por extenso (Bluefy não engole alias nem número solto)
-    balL=null; renderBalance(); // reset balanço ao (re)conectar qualquer bike
+    const bikeSvcs=[bt(0x1818),bt(0x1826),bt(0x1816),'f7461223-d7c1-11e4-9ab1-0002a5d5c51b']; // +serviço proprietário Wattbike (curva força/ângulo → Polar View); registrar aqui senão Bluefy bloqueia (lição Keiser)
+    balL=null; balSamples=[]; renderBalance(); curve79=[]; curveSub={}; renderPolar(); // reset balanço+polar ao (re)conectar
     let reqOpts;
     if(mode==='keiser'){
       if(!num){ log("Digite o nº da Keiser"); return; }
@@ -714,14 +755,14 @@ async function connectBike(mode, num){
       reqOpts={ filters:[{namePrefix:'Wattbike'}], optionalServices:bikeSvcs };
     }
     bikeDev=await navigator.bluetooth.requestDevice(reqOpts);
-    bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; balL=null; renderBalance(); log("Bike desconectada."); });
+    bikeDev.addEventListener('gattserverdisconnected',()=>{ $("dotPW").classList.remove('on'); power=null; cad=null; balL=null; balSamples=[]; renderBalance(); log("Bike desconectada."); });
     const srv=await bikeDev.gatt.connect(); const services=await srv.getPrimaryServices();
     gotBikeData=false;
     log("Conectado em: "+(bikeDev.name||"(sem nome)")+" — agora PEDALE p/ os números aparecerem.");
     try{ log("Serviços: "+services.map(s=>(s.uuid.match(/^0000([0-9a-f]{4})/)||[,s.uuid])[1]).join(", ")); }catch(_){}
     const has=u=>services.some(s=>s.uuid.includes(u));
     if(has('1826')){ await subFTMS(srv); }
-    else if(has('1818')){ await subCP(srv); if(has('1816')) await subCSC(srv); /* Wattbike: watts no 1818, cadência só no 1816 */ }
+    else if(has('1818')){ await subCP(srv); if(has('1816')) await subCSC(srv); if(has('f7461223')) await subWattbikeCurve(srv).catch(e=>log("Curva força/ângulo indisponível: "+e.message)); /* Wattbike: watts 1818, cadência 1816, curva proprietária f7461224 → Polar View */ }
     else { log("⚠️ bike sem FTMS/Cycling Power — veja serviços acima."); return; }
     $("dotPW").classList.add('on');
     log("Bike conectada ✓");
@@ -743,7 +784,7 @@ $("btnDisc").onclick=()=>{
   try{ bikeDev&&bikeDev.gatt.connected&&bikeDev.gatt.disconnect(); }catch(e){}
   $("dotHR").classList.remove('on'); $("dotPW").classList.remove('on');
   $("btnHR").classList.remove('ok'); $("btnHR").textContent="Conectar FC";
-  hr=power=cad=null; balL=null; renderBalance(); log("Desconectado FC + Bike.");
+  hr=power=cad=null; balL=null; balSamples=[]; renderBalance(); log("Desconectado FC + Bike.");
 };
 async function subFTMS(srv){
   const svc=await srv.getPrimaryService(bt(0x1826)); const ch=await svc.getCharacteristic(bt(0x2ad2)); // FTMS / Indoor Bike Data
@@ -767,7 +808,7 @@ async function subCP(srv){
   ch.addEventListener('characteristicvaluechanged',e=>{
     const dv=e.target.value; const flags=dv.getUint16(0,true);
     power=dv.getInt16(2,true);
-    if(flags & 0x0001){ balL = dv.getUint8(4)/2; } // Pedal Power Balance (Wattbike): % perna esquerda
+    if(flags & 0x0001){ pushBal(dv.getUint8(4)/2); } // Pedal Power Balance (Wattbike): % perna esquerda (suavizado)
     // offset correto: flags=2B + power=2B → balance em byte 4 (bit0 set)
     if(flags & 0x20){ // Crank Revolution Data Present -> cadência
       let o=4; if(flags&0x01)o+=1; if(flags&0x04)o+=2; if(flags&0x10)o+=6;
@@ -823,6 +864,49 @@ function renderBalance(){
   $("balTxt").innerHTML = `E ${Math.round(L)}% · D ${Math.round(R)}% · ${sym?"simétrico":"assimétrico"}`;
 }
 
+/* ===================== POLAR VIEW (curva força × ângulo, Wattbike) — ESTRUTURA (refinar domingo 07/06) =====================
+   Canal proprietário f7461224. Frames: [0]contador [1]0x02 [2]tipo(0xa1=dados) [3]idx 0..9; resto uint16 LE (a1 00 pula 1º par).
+   10 sub-frames × ~8 pts = ~79 pts/volta (360°). 2 lóbulos = 2 pernas. Ideal = "infinito sem o centro tocar".
+   Calibração: ver docs/ble/wattbike-curva-pedal-CALIBRACAO.md. PENDENTE domingo: separar/rotular L-D, escala em watts. */
+let curveSub={}, curve79=[];
+async function subWattbikeCurve(srv){
+  const svc=await srv.getPrimaryService('f7461223-d7c1-11e4-9ab1-0002a5d5c51b');
+  const ch=await svc.getCharacteristic('f7461224-d7c1-11e4-9ab1-0002a5d5c51b');
+  await ch.startNotifications();
+  ch.addEventListener('characteristicvaluechanged',e=>{
+    const b=new Uint8Array(e.target.value.buffer);
+    if(b[2]!==0xa1) return;                 // só frames de dados
+    const idx=b[3]; const pts=[]; let s=4; if(idx===0) s=6; // a1 00: 1º par é marcador
+    for(let i=s;i+1<b.length;i+=2) pts.push(b[i]|(b[i+1]<<8));
+    curveSub[idx]=pts;
+    if(idx===9){                            // fechou a volta -> monta 0..9
+      let c=[]; for(let k=0;k<=9;k++) if(curveSub[k]) c=c.concat(curveSub[k]);
+      if(c.length>=40){ curve79=c; renderPolar(); }
+      curveSub={};
+    }
+  });
+  log("Lendo curva força/ângulo (Polar View).");
+}
+function renderPolar(){
+  const wrap=$("polarwrap"); if(!wrap) return;
+  if(!curve79.length){ wrap.style.display="none"; return; }
+  wrap.style.display="block";
+  const N=curve79.length, mx=Math.max(...curve79), mn=Math.min(...curve79), span=(mx-mn)||1;
+  const cx=70, cy=70, r0=14, gain=46;
+  let pts="";
+  for(let i=0;i<N;i++){
+    const r=r0+((curve79[i]-mn)/span)*gain;
+    const a=(i/N)*2*Math.PI - Math.PI/2;    // 0 = topo (12h)
+    pts+=`${(cx+r*Math.cos(a)).toFixed(1)},${(cy+r*Math.sin(a)).toFixed(1)} `;
+  }
+  const avg=curve79.reduce((x,y)=>x+y,0)/N;
+  const redondeza=Math.round(avg/(mx||1)*100); // média/pico: 100 = totalmente redonda
+  $("polarSvg").innerHTML =
+    `<circle cx="${cx}" cy="${cy}" r="${(r0+gain).toFixed(0)}" fill="none" stroke="#ffffff14" stroke-width="1"/>`+
+    `<polygon points="${pts.trim()}" fill="#c9644222" stroke="#c96442" stroke-width="2"/>`;
+  $("polarTxt").innerHTML = `pedalada redonda: ${redondeza}% · ${N} pts/volta`;
+}
+
 /* ===================== HISTÓRICO ===================== */
 let histLoaded = false;
 async function loadHistory(force){
@@ -851,11 +935,20 @@ function renderForm(pmc){
   else { box.classList.add("risk"); msg="risco — recuperar"; }
   $("formMsg").textContent = msg + " (Coggan/Friel, adaptado)";
 }
+function seloFonte(s){
+  const f = (s.fontes && s.fontes[0]) || "app";
+  const ic = f==="manual" ? "✍️ manual" : (f==="garmin" ? "⌚ Garmin" : "📱 app");
+  const m = s.metodo_tss==="potencia" ? "potência"
+          : s.metodo_tss==="fc_lthr" ? "FC"
+          : s.metodo_tss==="rpe" ? "estimada" : null;
+  return m ? `${ic}·${m}` : ic;
+}
 function renderList(sessions){
   if(!sessions || !sessions.length){ $("histList").textContent="nenhum treino ainda"; return; }
   const fmtMin = s => Math.round((s||0)/60)+"min";
   $("histList").innerHTML = sessions.slice().reverse().map(s=>{
-    const left = `${s.data_local||""} · ${s.esporte||""} · ${fmtMin(s.duracao_s)}`;
+    const titulo = s.nome || s.esporte || "treino";
+    const left = `${s.data_local||""} · ${titulo} · ${fmtMin(s.duracao_s)} · ${seloFonte(s)}`;
     if(s.pontuada===false || s.carga_tss==null){ // não-pontuada (sem sensor) -> sinaliza, não conta no PMC
       return `<div class="histrow"><span>${left}</span><span class="tss" style="color:var(--mut);font-weight:400;">sem carga ⚠︎</span></div>`;
     }
@@ -888,14 +981,18 @@ function showView(which){
   $("viewLive").style.display = which==="live" ? "block" : "none";
   const vh=$("viewHist"); if(vh) vh.style.display = which==="hist" ? "block" : "none";
   const vt=$("viewTreinos"); if(vt) vt.style.display = which==="treinos" ? "block" : "none";
+  const vr=$("viewRegistrar"); if(vr) vr.style.display = which==="registrar" ? "block" : "none";
   $("tabLive").classList.toggle("on", which==="live");
   $("tabHist").classList.toggle("on", which==="hist");
   $("tabTreinos").classList.toggle("on", which==="treinos");
+  $("tabRegistrar").classList.toggle("on", which==="registrar");
   if(which==="hist" && typeof loadHistory==='function') loadHistory();
   if(which==="treinos") loadCards();
+  if(which==="registrar" && !$("regData").value){ $("regData").value = new Date().toISOString().slice(0,10); }
 }
 $("tabLive").onclick=()=>showView("live");
 $("tabHist").onclick=()=>showView("hist");
+$("tabRegistrar").onclick=()=>showView("registrar");
 
 /* ===================== ABA MEUS TREINOS ===================== */
 const ZONA_NOMES = [
@@ -1035,6 +1132,43 @@ $("edSalvar").addEventListener("click", edSalvar);
 $("edVoltar").addEventListener("click", ()=>{ trShow("lista"); });
 $("trTotal").addEventListener("input", edAtualizaFalta);
 $("tabTreinos").onclick=()=>showView("treinos");
+
+/* ===================== ABA REGISTRAR (entrada manual) ===================== */
+let regMod = "bike";
+document.querySelectorAll("#regModal .btab").forEach(b=>{
+  b.onclick=()=>{
+    regMod=b.dataset.mod;
+    document.querySelectorAll("#regModal .btab").forEach(x=>x.classList.toggle("on", x===b));
+    $("regFcWrap").style.display = (regMod==="forca") ? "none" : "block"; // força não tem FC útil
+  };
+});
+$("regSalvar").onclick=async()=>{
+  const msg=$("regMsg");
+  const dur=parseInt($("regDur").value,10), rpe=parseInt($("regRpe").value,10);
+  const data=$("regData").value;
+  const fcRaw=$("regFc").value.trim();
+  if(!data){ msg.textContent="⚠️ escolha a data."; return; }
+  if(!(dur>0)){ msg.textContent="⚠️ duração em minutos."; return; }
+  if(!(rpe>=0 && rpe<=10)){ msg.textContent="⚠️ esforço de 0 a 10."; return; }
+  const body={ modalidade:regMod, data, duracao_s:dur*60, rpe };
+  if(regMod!=="forca" && fcRaw){ body.fc_media=parseInt(fcRaw,10); }
+  const nome=$("regNome").value.trim(); if(nome) body.nome=nome;
+  const tk=getApiToken(true); if(!tk){ msg.textContent="🔑 senha necessária."; return; }
+  msg.textContent="salvando…";
+  try{
+    const r=await fetch(PORTEIRO_URL+"/manual",{ method:"POST",
+      headers:{ "Content-Type":"application/json", "X-User-Id":USER_ID, "X-Api-Token":tk },
+      body:JSON.stringify(body) });
+    if(r.status===201){
+      msg.textContent="✅ treino registrado!";
+      $("regDur").value=""; $("regRpe").value=""; $("regFc").value=""; $("regNome").value="";
+      histLoaded=false;                      // invalida cache do Histórico
+      setTimeout(()=>showView("hist"), 600); // mostra o treino na lista
+    } else {
+      const e=await r.json().catch(()=>({})); msg.textContent="⚠️ "+(e.error||("erro "+r.status));
+    }
+  }catch(err){ msg.textContent="⚠️ falha de rede: "+err.message; }
+};
 </script>
 </body>
 </html>
