@@ -964,6 +964,7 @@ function renderBalance(){
    10 sub-frames × ~8 pts = ~79 pts/volta (360°). 2 lóbulos = 2 pernas. Ideal = "infinito sem o centro tocar".
    Calibração: ver docs/ble/wattbike-curva-pedal-CALIBRACAO.md. PENDENTE domingo: separar/rotular L-D, escala em watts. */
 let curveSub={}, curve79=[];
+const POLAR_IDEAL=0.55;   // limiar de "pedalada redonda" (força ponto-morto ÷ pico) p/ os lóbulos ficarem VERDES; ajustar vendo os valores reais
 async function subWattbikeCurve(srv){
   const svc=await srv.getPrimaryService('f7461223-d7c1-11e4-9ab1-0002a5d5c51b');
   const ch=await svc.getCharacteristic('f7461224-d7c1-11e4-9ab1-0002a5d5c51b');
@@ -1027,11 +1028,14 @@ function renderPolar(){
   const lobe=(seg,lado,vsign)=>{ let p=""; const L=seg.length;
     for(let j=0;j<L;j++){ const th=(j/(L-1))*Math.PI, r=r0+((c[seg[j]]-mn)/span)*gain;
       p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-vsign*r*Math.cos(th)).toFixed(1)} `; } return p.trim(); };
+  // "ideal" = pedalada redonda: força no ponto morto ÷ pico. Alto = puxa na subida, não só empurra.
+  const redondeza = mx? mn/mx : 0, ideal = redondeza >= POLAR_IDEAL;
+  const cE = ideal?"#2ea043":"#58a6ff", cD = ideal?"#2ea043":"#c96442";   // ambos VERDES quando ideal (gabarito)
   $("polarSvg").innerHTML = chassi +
-    `<polygon points="${lobe(esq,-1,1)}" fill="#58a6ff26" stroke="#58a6ff" stroke-width="2"/>`+
-    `<polygon points="${lobe(dir,1,-1)}" fill="#c9644226" stroke="#c96442" stroke-width="2"/>`;
+    `<polygon points="${lobe(esq,-1,1)}" fill="${cE}26" stroke="${cE}" stroke-width="2"/>`+
+    `<polygon points="${lobe(dir,1,-1)}" fill="${cD}26" stroke="${cD}" stroke-width="2"/>`;
   const L=(balL!=null)?Math.round(balL):null;
-  $("polarTxt").innerHTML = (L!=null)? `E ${L}% · D ${100-L}%` : `${N} pts/volta`;
+  $("polarTxt").innerHTML = (L!=null? `E ${L}% · D ${100-L}% · ` : "") + `redondo ${Math.round(redondeza*100)}%${ideal?" ✓ ideal":""}`;
 }
 
 /* ===================== HISTÓRICO ===================== */
