@@ -983,24 +983,47 @@ async function subWattbikeCurve(srv){
   });
   log("Lendo curva força/ângulo (Polar View).");
 }
+// Polar View estilo Wattbike: 2 lóbulos (1 por perna) espelhados, eixos 0°(topo)/90°(lado)/180°(baixo).
+// Calibração 2026-06-07 (6 capturas): ESQUERDA = lóbulo c/ pico de menor índice (~idx27), DIREITA = ~idx77;
+// pontos mortos = os 2 vales (~idx4 e ~idx48). Vales detectados ao vivo; fase calibrada como fallback.
 function renderPolar(){
   const wrap=$("polarwrap"); if(!wrap) return;
-  if(!curve79.length){ wrap.style.display="none"; return; }
+  const c=curve79, N=c.length;
+  if(N<40){ wrap.style.display="none"; return; }
   wrap.style.display="block";
-  const N=curve79.length, mx=Math.max(...curve79), mn=Math.min(...curve79), span=(mx-mn)||1;
-  const cx=70, cy=70, r0=14, gain=46;
-  let pts="";
-  for(let i=0;i<N;i++){
-    const r=r0+((curve79[i]-mn)/span)*gain;
-    const a=(i/N)*2*Math.PI - Math.PI/2;    // 0 = topo (12h)
-    pts+=`${(cx+r*Math.cos(a)).toFixed(1)},${(cy+r*Math.sin(a)).toFixed(1)} `;
-  }
-  const avg=curve79.reduce((x,y)=>x+y,0)/N;
-  const redondeza=Math.round(avg/(mx||1)*100); // média/pico: 100 = totalmente redonda
+  const mx=Math.max(...c), mn=Math.min(...c), span=(mx-mn)||1;
+  const cx=70, cy=70, r0=8, gain=52;
+  // 1) 2 pontos mortos = 2 vales (mínimos) mais fundos; fallback p/ a fase calibrada
+  const rr=6; let mins=[];
+  for(let i=0;i<N;i++){ let lo=true; for(let k=-rr;k<=rr;k++){ if(c[((i+k)%N+N)%N]<c[i]){lo=false;break;} } if(lo) mins.push(i); }
+  const uniq=[]; for(const i of mins){ if(!uniq.length || Math.min(Math.abs(i-uniq[uniq.length-1]),N-Math.abs(i-uniq[uniq.length-1]))>rr) uniq.push(i); }
+  uniq.sort((a,b)=>c[a]-c[b]);
+  let v1=4, v2=48;
+  if(uniq.length>=2){ const a=Math.min(uniq[0],uniq[1]), b=Math.max(uniq[0],uniq[1]), gap=b-a; if(gap>=15 && gap<=64){ v1=a; v2=b; } }
+  // 2) 2 lóbulos (segmentos entre os vales)
+  const segA=[]; for(let i=v1;i<=v2;i++) segA.push(i);
+  const segB=[]; for(let i=v2;i<=v1+N;i++) segB.push(((i%N)+N)%N);
+  const peak=seg=>seg.reduce((bi,i)=>c[i]>c[bi]?i:bi, seg[0]);
+  const esq = peak(segA)<=peak(segB) ? segA : segB;   // pico de menor índice = ESQUERDA (cross-validado)
+  const dir = esq===segA ? segB : segA;
+  // 3) traça cada lóbulo no seu lado (θ: 0=topo, π=baixo; esquerda x-, direita x+)
+  const lobe=(seg,lado)=>{ let p=""; const L=seg.length;
+    for(let j=0;j<L;j++){ const th=(j/(L-1))*Math.PI, r=r0+((c[seg[j]]-mn)/span)*gain;
+      p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-r*Math.cos(th)).toFixed(1)} `; } return p.trim(); };
+  const ax="#ffffff22", lab="#8b98a5";
   $("polarSvg").innerHTML =
-    `<circle cx="${cx}" cy="${cy}" r="${(r0+gain).toFixed(0)}" fill="none" stroke="#ffffff14" stroke-width="1"/>`+
-    `<polygon points="${pts.trim()}" fill="#c9644222" stroke="#c96442" stroke-width="2"/>`;
-  $("polarTxt").innerHTML = `pedalada redonda: ${redondeza}% · ${N} pts/volta`;
+    `<line x1="70" y1="18" x2="70" y2="122" stroke="${ax}"/>`+
+    `<line x1="14" y1="70" x2="126" y2="70" stroke="${ax}"/>`+
+    `<text x="3" y="13" fill="${lab}" font-size="8">LeftL</text>`+
+    `<text x="107" y="13" fill="${lab}" font-size="8">RightL</text>`+
+    `<text x="72" y="15" fill="${lab}" font-size="7">0°</text>`+
+    `<text x="71" y="133" fill="${lab}" font-size="7">180°</text>`+
+    `<text x="2" y="81" fill="${lab}" font-size="7">90°</text>`+
+    `<text x="127" y="81" fill="${lab}" font-size="7">90°</text>`+
+    `<polygon points="${lobe(esq,-1)}" fill="#58a6ff26" stroke="#58a6ff" stroke-width="2"/>`+
+    `<polygon points="${lobe(dir,1)}" fill="#c9644226" stroke="#c96442" stroke-width="2"/>`;
+  const L=(balL!=null)?Math.round(balL):null;
+  $("polarTxt").innerHTML = (L!=null)? `E ${L}% · D ${100-L}%` : `${N} pts/volta`;
 }
 
 /* ===================== HISTÓRICO ===================== */
