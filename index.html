@@ -232,7 +232,11 @@
       <div id="rpeRow" class="btnrow"></div></div>
     <div class="card2"><div class="q">Sensação — como você se sente?</div>
       <div id="sensRow" class="btnrow"></div></div>
-    <button id="btnCliquesOk" class="go" style="width:100%;margin-top:8px;" disabled>Confirmar</button>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button id="btnCliquesSkip" class="gray" style="flex:1;">Pular</button>
+      <button id="btnCliquesOk" class="go" style="flex:2;" disabled>Confirmar avaliação</button>
+    </div>
+    <div class="riblegend" style="margin-top:6px;">✓ Treino já salvo. A avaliação é opcional.</div>
   </div>
 
   <div id="resumo"></div>
@@ -519,6 +523,9 @@ function pushBal(v){
 }
 let hrDev=null, bikeDev=null;
 let running=false, paused=false, elapsed=0, tickTimer=null;
+let lastDataElapsed=-1;     // 'elapsed' do último dado BLE recebido (-1 = nenhum) -> base do auto-save por inatividade
+let sessionData=null;       // payload da sessão; reusado p/ complementar c/ a avaliação (mesmo session_id -> upsert no porteiro)
+function markData(){ if(running && !paused) lastDataElapsed=elapsed; }   // chamado em todo notify BLE
 let lastZone=null;                // p/ disparar som só na transição
 const samples=[];                 // série temporal p/ resumo
 const ribAgg=[];                  // soma/contagem de potência por minuto (fita O(células), não O(células×amostras))
@@ -614,8 +621,13 @@ function startTick(){
   tickTimer=setInterval(()=>{
     if(paused) return;
     elapsed++;
-    if(elapsed>=TOTAL_SEC){ tickUpdate(); finish(); return; }
     tickUpdate();
+    // App NÃO para mais ao bater o tempo total -> segue gravando (modo livre/extra).
+    // Auto-save por inatividade: 60s sem dados dentro do programado, 120s no overtime (HIIT/descanso não corta cedo).
+    if(lastDataElapsed>=0){
+      const limite = (elapsed>=TOTAL_SEC) ? 120 : 60;
+      if(elapsed-lastDataElapsed >= limite){ log("Sem dados há "+limite+"s — salvando automático."); finish(); return; }
+    }
   },1000);
 }
 function tickUpdate(){
@@ -678,7 +690,7 @@ function tickUpdate(){
 $("btnStart").onclick=()=>{
   if(running) return;
   unlockAudio(); requestWakeLock();
-  running=true; paused=false; elapsed=0; samples.length=0; ribAgg.length=0; lastZone=null;
+  running=true; paused=false; elapsed=0; samples.length=0; ribAgg.length=0; lastZone=null; lastDataElapsed=-1; sessionData=null;
   lastCR=lastCT=lastCCR=lastCCT=null; // zera deltas de cadência: bike conectada entre 2 treinos não gera RPM absurdo no 1º sample
   buildRibbon();
   $("resumo").style.display="none";
@@ -702,7 +714,8 @@ function finish(){
   $("status").className=""; $("st-msg").textContent="Treino finalizado"; $("st-blk").textContent="—"; $("st-rest").textContent="";
   log("Treino finalizado em "+fmt(elapsed)+".");
   paintRibbon();
-  askCliques((doisCliques)=>{ showResumo(doisCliques); });
+  showResumo(null);                       // SALVA AUTOMÁTICO já (sem depender da avaliação) — nunca perde dados
+  askCliques((doisCliques)=>{ if(doisCliques) showResumo(doisCliques); });  // avaliação opcional -> complementa (mesmo session_id)
 }
 
 /* ===================== 2 CLIQUES (RPE + SENSAÇÃO) ===================== */
@@ -720,6 +733,7 @@ function askCliques(onDone){
   cliqueRPE=null; cliqueSens=null; buildCliques(); checkCliques();
   $("cliques").style.display="block";
   $("btnCliquesOk").onclick=()=>{ $("cliques").style.display="none"; onDone({rpe:cliqueRPE, sensacao:cliqueSens}); };
+  $("btnCliquesSkip").onclick=()=>{ $("cliques").style.display="none"; onDone(null); };  // treino já salvo; pular só fecha
 }
 
 /* ===================== RESUMO + EXPORT ===================== */
@@ -736,17 +750,18 @@ function showResumo(doisCliques){
   const pws=samples.filter(s=>s.power!=null).map(s=>s.power);
   const pct = ribScorePct();
   const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length):null; // null (não "—"/NaN) p/ campo numérico do banco
-  const iso = new Date().toISOString();
-  const status = (elapsed < TOTAL_SEC) ? "parcial" : "normal";
-  const data = {
-    session_id: genSessionId(iso),
-    user_id: USER_ID,
-    esporte: "indoor_cycling",
-    treino: WORKOUT.name, data: iso, duracao_s: elapsed,
-    fc_media: avg(hrs), fc_max: hrs.length?Math.max(...hrs):null,
-    watts_medio: avg(pws), status: status, amostras: samples, // pct_na_faixa NÃO vai no payload: servidor calcula das amostras (fonte única)
-    dois_cliques: doisCliques || null,
-  };
+  // 1ª chamada (auto-save no finish) cria o payload + session_id; 2ª (avaliação) REUSA o mesmo session_id -> upsert no porteiro
+  if(!sessionData){
+    const iso = new Date().toISOString();
+    sessionData = { session_id: genSessionId(iso), user_id: USER_ID, esporte:"indoor_cycling", treino: WORKOUT.name, data: iso };
+  }
+  const data = sessionData;
+  data.duracao_s = elapsed;
+  data.fc_media = avg(hrs); data.fc_max = hrs.length?Math.max(...hrs):null;
+  data.watts_medio = avg(pws);
+  data.status = (elapsed < TOTAL_SEC) ? "parcial" : "normal";
+  data.amostras = samples; // pct_na_faixa NÃO vai no payload: servidor calcula das amostras (fonte única)
+  if(doisCliques) data.dois_cliques = doisCliques; else if(!('dois_cliques' in data)) data.dois_cliques = null;
   $("resumo").style.display="block";
   $("resumo").innerHTML = `<h3>Resumo do treino</h3>
     <div class="row"><span>Duração</span><b>${fmt(elapsed)}</b></div>
@@ -776,7 +791,7 @@ $("btnHR").onclick=async()=>{
     hrDev.addEventListener('gattserverdisconnected',()=>{ $("dotHR").classList.remove('on'); hr=null; log("FC desconectada."); });
     const s=await hrDev.gatt.connect(); const svc=await s.getPrimaryService('heart_rate'); const ch=await svc.getCharacteristic('heart_rate_measurement');
     await ch.startNotifications();
-    ch.addEventListener('characteristicvaluechanged',e=>{ const dv=e.target.value; const f=dv.getUint8(0); hr=(f&1)?dv.getUint16(1,true):dv.getUint8(1); if(!running)$("hr").textContent=hr; });
+    ch.addEventListener('characteristicvaluechanged',e=>{ markData(); const dv=e.target.value; const f=dv.getUint8(0); hr=(f&1)?dv.getUint16(1,true):dv.getUint8(1); if(!running)$("hr").textContent=hr; });
     $("dotHR").classList.add('on'); $("btnHR").classList.add('ok'); $("btnHR").textContent="FC ✓"; log("FC conectada.");
   }catch(e){ log("Erro FC: "+e.message); }
 };
@@ -836,6 +851,7 @@ async function subFTMS(srv){
   const svc=await srv.getPrimaryService(bt(0x1826)); const ch=await svc.getCharacteristic(bt(0x2ad2)); // FTMS / Indoor Bike Data
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
+    markData();
     const dv=e.target.value; let o=0; const f=dv.getUint16(o,true); o+=2;
     if(!(f&0x0001)) o+=2; if(f&0x0002) o+=2;
     if(f&0x0004){ cad=Math.round(dv.getUint16(o,true)/2); o+=2; } if(f&0x0008) o+=2;
@@ -852,6 +868,7 @@ async function subCP(srv){
   const svc=await srv.getPrimaryService(bt(0x1818)); const ch=await svc.getCharacteristic(bt(0x2a63)); // Cycling Power / Measurement
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
+    markData();
     const dv=e.target.value; const flags=dv.getUint16(0,true);
     power=dv.getInt16(2,true);
     if(flags & 0x0001){ pushBal(dv.getUint8(4)/2); } // Pedal Power Balance (Wattbike): % perna esquerda (suavizado)
@@ -875,6 +892,7 @@ async function subCSC(srv){
   catch(e){ log("CSC indisponível: "+e.message); return; }
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
+    markData();
     const dv=e.target.value; const flags=dv.getUint8(0); let o=1;
     if(flags&0x01) o+=6; // Wheel Revolution Data (uint32 + uint16) -> pular
     if(flags&0x02){ // Crank Revolution Data -> cadência
@@ -920,6 +938,7 @@ async function subWattbikeCurve(srv){
   const ch=await svc.getCharacteristic('f7461224-d7c1-11e4-9ab1-0002a5d5c51b');
   await ch.startNotifications();
   ch.addEventListener('characteristicvaluechanged',e=>{
+    markData();
     const b=new Uint8Array(e.target.value.buffer);
     if(b[2]!==0xa1) return;                 // só frames de dados
     const idx=b[3]; const pts=[]; let s=4; if(idx===0) s=6; // a1 00: 1º par é marcador
