@@ -1007,21 +1007,24 @@ function renderPolar(){
   const esq = peak(segA)<=peak(segB) ? segA : segB;   // pico de menor índice = ESQUERDA (cross-validado)
   const dir = esq===segA ? segB : segA;
   // 3) traça cada lóbulo no seu lado (θ: 0=topo, π=baixo; esquerda x-, direita x+)
-  const lobe=(seg,lado)=>{ let p=""; const L=seg.length;
+  // Wattbike: ESQUERDA 0°=topo→180°=baixo ; DIREITA 0°=baixo→180°=topo (espelhado vertical). vsign faz isso.
+  const lobe=(seg,lado,vsign)=>{ let p=""; const L=seg.length;
     for(let j=0;j<L;j++){ const th=(j/(L-1))*Math.PI, r=r0+((c[seg[j]]-mn)/span)*gain;
-      p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-r*Math.cos(th)).toFixed(1)} `; } return p.trim(); };
+      p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-vsign*r*Math.cos(th)).toFixed(1)} `; } return p.trim(); };
   const ax="#ffffff22", lab="#8b98a5";
   $("polarSvg").innerHTML =
-    `<line x1="70" y1="18" x2="70" y2="122" stroke="${ax}"/>`+
+    `<line x1="70" y1="16" x2="70" y2="124" stroke="${ax}"/>`+
     `<line x1="14" y1="70" x2="126" y2="70" stroke="${ax}"/>`+
-    `<text x="3" y="13" fill="${lab}" font-size="8">LeftL</text>`+
-    `<text x="107" y="13" fill="${lab}" font-size="8">RightL</text>`+
-    `<text x="72" y="15" fill="${lab}" font-size="7">0°</text>`+
-    `<text x="71" y="133" fill="${lab}" font-size="7">180°</text>`+
-    `<text x="2" y="81" fill="${lab}" font-size="7">90°</text>`+
-    `<text x="127" y="81" fill="${lab}" font-size="7">90°</text>`+
-    `<polygon points="${lobe(esq,-1)}" fill="#58a6ff26" stroke="#58a6ff" stroke-width="2"/>`+
-    `<polygon points="${lobe(dir,1)}" fill="#c9644226" stroke="#c96442" stroke-width="2"/>`;
+    `<text x="2" y="12" fill="${lab}" font-size="7">LeftL</text>`+
+    `<text x="111" y="12" fill="${lab}" font-size="7">RightL</text>`+
+    `<text x="57" y="13" fill="${lab}" font-size="7">0°</text>`+
+    `<text x="72" y="13" fill="${lab}" font-size="7">180°</text>`+
+    `<text x="50" y="135" fill="${lab}" font-size="7">180°</text>`+
+    `<text x="72" y="135" fill="${lab}" font-size="7">0°</text>`+
+    `<text x="1" y="74" fill="${lab}" font-size="7">90°</text>`+
+    `<text x="127" y="74" fill="${lab}" font-size="7">90°</text>`+
+    `<polygon points="${lobe(esq,-1,1)}" fill="#58a6ff26" stroke="#58a6ff" stroke-width="2"/>`+
+    `<polygon points="${lobe(dir,1,-1)}" fill="#c9644226" stroke="#c96442" stroke-width="2"/>`;
   const L=(balL!=null)?Math.round(balL):null;
   $("polarTxt").innerHTML = (L!=null)? `E ${L}% · D ${100-L}%` : `${N} pts/volta`;
 }
