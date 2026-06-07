@@ -1025,9 +1025,15 @@ function renderPolar(){
   const dir = esq===segA ? segB : segA;
   // 3) traça cada lóbulo no seu lado (θ: 0=topo, π=baixo; esquerda x-, direita x+)
   // Wattbike: ESQUERDA 0°=topo→180°=baixo ; DIREITA 0°=baixo→180°=topo (espelhado vertical). vsign faz isso.
-  const lobe=(seg,lado,vsign)=>{ let p=""; const L=seg.length;
-    for(let j=0;j<L;j++){ const th=(j/(L-1))*Math.PI, r=r0+((c[seg[j]]-mn)/span)*gain;
-      p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-vsign*r*Math.cos(th)).toFixed(1)} `; } return p.trim(); };
+  // re-amostra cada lóbulo p/ M pontos com spline Catmull-Rom -> ambos lados MESMA resolução e lisos (sem espículas/quinas do lado com menos pontos)
+  const lobe=(seg,lado,vsign)=>{ const L=seg.length, M=72;
+    const fv=k=>c[seg[Math.max(0,Math.min(L-1,k))]];
+    const cr=(a,b,cc,d,t)=>{ const t2=t*t,t3=t2*t; return 0.5*(2*b+(-a+cc)*t+(2*a-5*b+4*cc-d)*t2+(-a+3*b-3*cc+d)*t3); };
+    let p="";
+    for(let m=0;m<M;m++){ const g=m/(M-1)*(L-1), j=Math.floor(g), f=g-j;
+      const val=cr(fv(j-1),fv(j),fv(j+1),fv(j+2),f), th=(m/(M-1))*Math.PI, r=r0+((val-mn)/span)*gain;
+      p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-vsign*r*Math.cos(th)).toFixed(1)} `; }
+    return p.trim(); };
   // "ideal" = pedalada redonda: força no ponto morto ÷ pico. Alto = puxa na subida, não só empurra.
   const redondeza = mx? mn/mx : 0, ideal = redondeza >= POLAR_IDEAL;
   const cE = ideal?"#2ea043":"#58a6ff", cD = ideal?"#2ea043":"#c96442";   // ambos VERDES quando ideal (gabarito)
