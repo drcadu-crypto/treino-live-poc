@@ -524,14 +524,17 @@ let hr=null, power=null, cad=null, balL=null;
 // Suavização do balanço E/D: a Wattbike manda o valor CRU de cada pedalada (pula
 // 44↔54% facilmente). Guardamos as amostras dos últimos BAL_WIN_MS e mostramos a
 // MÉDIA (tendência), como velocímetro — estável, sem tremer. Ajuste a janela aqui.
-let balSamples=[]; const BAL_WIN_MS=2500;   // janela menor = reage mais rápido a cada pedalada (mais dinâmico)
+let balSamples=[]; const BAL_CICLOS=1;   // suaviza por N ciclos de pedalada (janela = 60/rpm s): 1 ciclo = "o balanço desta pedalada"
 function pushBal(v){
   const now=Date.now();
   balSamples.push({t:now,v});
-  while(balSamples.length && now-balSamples[0].t>BAL_WIN_MS) balSamples.shift();
+  // janela de suavização = N ciclos de pedalada (não tempo fixo): a 60rpm 1 ciclo=1s, a 90rpm=0,67s.
+  // Atrela ao ritmo real -> sempre mostra "o balanço da pedalada atual". Clamp 0,5–3s p/ cadência extrema/parado.
+  const winMs = (cad>0) ? Math.min(3000, Math.max(500, BAL_CICLOS*60000/cad)) : 1000;
+  while(balSamples.length && now-balSamples[0].t>winMs) balSamples.shift();
   let s=0; for(const x of balSamples) s+=x.v;
   balL = balSamples.length ? s/balSamples.length : null;
-  renderBalance();   // re-render a cada pacote de balanço -> ao vivo, não só 1×/s
+  renderBalance();   // re-render a cada pacote de balanço -> ao vivo
 }
 let hrDev=null, bikeDev=null;
 let running=false, paused=false, elapsed=0, tickTimer=null;
