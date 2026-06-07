@@ -226,7 +226,7 @@
 
   <div id="polarwrap" class="balwrap" style="display:none;">
     <div class="balhead"><span>Pedalada (força × ângulo)</span><span id="polarTxt" class="mut"></span></div>
-    <svg id="polarSvg" class="balsvg" viewBox="0 0 140 140" width="100%" preserveAspectRatio="xMidYMid meet" style="height:170px;"></svg>
+    <svg id="polarSvg" class="balsvg" viewBox="0 0 140 140" width="100%" preserveAspectRatio="xMidYMid meet" style="height:280px;"></svg>
   </div>
   <div class="controls row2" style="margin-top:8px;">
     <button id="btnStart" class="go">▶ Iniciar</button>
@@ -975,9 +975,10 @@ async function subWattbikeCurve(srv){
     const idx=b[3]; const pts=[]; let s=4; if(idx===0) s=6; // a1 00: 1º par é marcador
     for(let i=s;i+1<b.length;i+=2) pts.push(b[i]|(b[i+1]<<8));
     curveSub[idx]=pts;
-    if(idx===9){                            // fechou a volta -> monta 0..9
-      let c=[]; for(let k=0;k<=9;k++) if(curveSub[k]) c=c.concat(curveSub[k]);
-      if(c.length>=40){ curve79=c; renderPolar(); }
+    if(idx===9){                            // fechou a volta -> só desenha se TODOS os 10 sub-frames chegaram
+      let completo=true; for(let k=0;k<=9;k++) if(!curveSub[k]) completo=false;
+      if(completo){ let c=[]; for(let k=0;k<=9;k++) c=c.concat(curveSub[k]);
+        if(c.length>=70){ curve79=c; renderPolar(); } }   // volta com pacote BLE perdido é descartada -> evita "linha reta" (buraco)
       curveSub={};
     }
   });
