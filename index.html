@@ -1004,8 +1004,10 @@ function renderPolar(){
     `<text x="72" y="135" fill="${lab}" font-size="7">0°</text>`+
     `<text x="1" y="74" fill="${lab}" font-size="7">90°</text>`+
     `<text x="127" y="74" fill="${lab}" font-size="7">90°</text>`;
-  const c=curve79, N=c.length;
+  const raw=curve79, N=raw.length;
   if(N<40){ $("polarSvg").innerHTML=chassi; $("polarTxt").innerHTML="pedale firme p/ ver a curva"; return; }
+  const med=i=>{const w=[raw[((i-2)%N+N)%N],raw[((i-1)%N+N)%N],raw[i],raw[(i+1)%N],raw[(i+2)%N]].sort((a,b)=>a-b);return w[2];};
+  const c=raw.map((_,i)=>med(i));   // mediana-5 circular: mata spikes/espinhos e buracos de 1-2 pontos sem achatar a forma
   const mx=Math.max(...c), mn=Math.min(...c), span=(mx-mn)||1;
   // 1) 2 pontos mortos = 2 vales (mínimos) mais fundos; fallback p/ a fase calibrada
   const rr=6; let mins=[];
