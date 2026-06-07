@@ -829,7 +829,7 @@ $("btnHR").onclick=async()=>{
 async function connectBike(mode, num){
   try{
     const bikeSvcs=[bt(0x1818),bt(0x1826),bt(0x1816),'f7461223-d7c1-11e4-9ab1-0002a5d5c51b']; // +serviço proprietário Wattbike (curva força/ângulo → Polar View); registrar aqui senão Bluefy bloqueia (lição Keiser)
-    balL=null; balSamples=[]; renderBalance(); curve79=[]; curveSub={}; renderPolar(); // reset balanço+polar ao (re)conectar
+    balL=null; balSamples=[]; renderBalance(); curve79=[]; curveSub={}; $("polarwrap").style.display="none"; // reset; Polar só reaparece p/ Wattbike (subWattbikeCurve)
     let reqOpts;
     if(mode==='keiser'){
       if(!num){ log("Digite o nº da Keiser"); return; }
@@ -981,18 +981,31 @@ async function subWattbikeCurve(srv){
       curveSub={};
     }
   });
-  log("Lendo curva força/ângulo (Polar View).");
+  log("Lendo curva força/ângulo (Polar View)."); renderPolar(); // mostra a grade (cardeais) já ao conectar, antes de pedalar
 }
 // Polar View estilo Wattbike: 2 lóbulos (1 por perna) espelhados, eixos 0°(topo)/90°(lado)/180°(baixo).
 // Calibração 2026-06-07 (6 capturas): ESQUERDA = lóbulo c/ pico de menor índice (~idx27), DIREITA = ~idx77;
 // pontos mortos = os 2 vales (~idx4 e ~idx48). Vales detectados ao vivo; fase calibrada como fallback.
 function renderPolar(){
   const wrap=$("polarwrap"); if(!wrap) return;
-  const c=curve79, N=c.length;
-  if(N<40){ wrap.style.display="none"; return; }
   wrap.style.display="block";
-  const mx=Math.max(...c), mn=Math.min(...c), span=(mx-mn)||1;
   const cx=70, cy=70, r0=8, gain=52;
+  const ax="#ffffff33", lab="#8b98a5";
+  // CHASSI (eixos + cardeais) — sempre desenhado, mesmo sem pedalar ainda
+  const chassi=
+    `<line x1="70" y1="16" x2="70" y2="124" stroke="${ax}"/>`+
+    `<line x1="14" y1="70" x2="126" y2="70" stroke="${ax}"/>`+
+    `<text x="2" y="12" fill="${lab}" font-size="7">LeftL</text>`+
+    `<text x="111" y="12" fill="${lab}" font-size="7">RightL</text>`+
+    `<text x="57" y="13" fill="${lab}" font-size="7">0°</text>`+
+    `<text x="72" y="13" fill="${lab}" font-size="7">180°</text>`+
+    `<text x="50" y="135" fill="${lab}" font-size="7">180°</text>`+
+    `<text x="72" y="135" fill="${lab}" font-size="7">0°</text>`+
+    `<text x="1" y="74" fill="${lab}" font-size="7">90°</text>`+
+    `<text x="127" y="74" fill="${lab}" font-size="7">90°</text>`;
+  const c=curve79, N=c.length;
+  if(N<40){ $("polarSvg").innerHTML=chassi; $("polarTxt").innerHTML="pedale firme p/ ver a curva"; return; }
+  const mx=Math.max(...c), mn=Math.min(...c), span=(mx-mn)||1;
   // 1) 2 pontos mortos = 2 vales (mínimos) mais fundos; fallback p/ a fase calibrada
   const rr=6; let mins=[];
   for(let i=0;i<N;i++){ let lo=true; for(let k=-rr;k<=rr;k++){ if(c[((i+k)%N+N)%N]<c[i]){lo=false;break;} } if(lo) mins.push(i); }
@@ -1011,18 +1024,7 @@ function renderPolar(){
   const lobe=(seg,lado,vsign)=>{ let p=""; const L=seg.length;
     for(let j=0;j<L;j++){ const th=(j/(L-1))*Math.PI, r=r0+((c[seg[j]]-mn)/span)*gain;
       p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-vsign*r*Math.cos(th)).toFixed(1)} `; } return p.trim(); };
-  const ax="#ffffff22", lab="#8b98a5";
-  $("polarSvg").innerHTML =
-    `<line x1="70" y1="16" x2="70" y2="124" stroke="${ax}"/>`+
-    `<line x1="14" y1="70" x2="126" y2="70" stroke="${ax}"/>`+
-    `<text x="2" y="12" fill="${lab}" font-size="7">LeftL</text>`+
-    `<text x="111" y="12" fill="${lab}" font-size="7">RightL</text>`+
-    `<text x="57" y="13" fill="${lab}" font-size="7">0°</text>`+
-    `<text x="72" y="13" fill="${lab}" font-size="7">180°</text>`+
-    `<text x="50" y="135" fill="${lab}" font-size="7">180°</text>`+
-    `<text x="72" y="135" fill="${lab}" font-size="7">0°</text>`+
-    `<text x="1" y="74" fill="${lab}" font-size="7">90°</text>`+
-    `<text x="127" y="74" fill="${lab}" font-size="7">90°</text>`+
+  $("polarSvg").innerHTML = chassi +
     `<polygon points="${lobe(esq,-1,1)}" fill="#58a6ff26" stroke="#58a6ff" stroke-width="2"/>`+
     `<polygon points="${lobe(dir,1,-1)}" fill="#c9644226" stroke="#c96442" stroke-width="2"/>`;
   const L=(balL!=null)?Math.round(balL):null;
