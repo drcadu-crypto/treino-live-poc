@@ -77,9 +77,11 @@
 
   .ftpwrap{ margin:4px 0 1px; }
   .ftphead{ display:flex; justify-content:space-between; font-size:11px; color:var(--mut); margin-bottom:2px; }
-  .ftpbar{ position:relative; height:9px; border-radius:5px; background:#0a0d12; border:1px solid var(--bord); overflow:hidden; }
+  .ftpbar{ position:relative; height:18px; border-radius:6px; background:#0a0d12; border:1px solid var(--bord); overflow:hidden; }
   .ftpzone{ position:absolute; top:0; bottom:0; background:rgba(46,160,67,.28); border-left:1px solid var(--verde); border-right:1px solid var(--verde); }
-  .ftpcursor{ position:absolute; top:-2px; bottom:-2px; width:3px; background:#fff; box-shadow:0 0 6px #fff; left:0; transition:left .3s linear; }
+  .ftpcursor{ position:absolute; top:-2px; bottom:-2px; width:4px; background:#fff; box-shadow:0 0 6px #fff; left:0; transition:left .3s linear; }
+  .ftpcursor.estouro{ background:var(--amar); box-shadow:0 0 9px var(--amar); animation:piscaCursor .5s steps(1) infinite; }
+  @keyframes piscaCursor{ 50%{ opacity:.2; } }
 
   #cliques{ background:var(--card); border:1px solid var(--bord); border-radius:14px; padding:14px; margin-top:12px; }
   .card2{ margin-bottom:12px; } .card2 .q{ font-size:13px; color:var(--txt); margin-bottom:8px; }
@@ -95,6 +97,7 @@
   .pwbig .u{ font-size:18px; color:var(--mut); margin-left:4px; }
 
   /* Fita de aderência por minuto */
+  .guidewrap{ margin:6px 0 2px; }
   .ribwrap{ margin:8px 0 2px; }
   .ribhead{ display:flex; justify-content:space-between; font-size:12px; color:var(--mut); margin-bottom:4px; }
   .riblegend{ font-size:11px; color:var(--mut); line-height:1.4; margin-bottom:5px; }
@@ -183,15 +186,19 @@
 
   <div class="pwbig"><span id="pwBig">—</span><span class="u">W</span></div>
 
+  <div class="guidewrap">
+    <div class="ribhead"><span><b>Fases do treino</b> · cor = zona · marca = onde você está</span></div>
+    <div id="ribGuide" class="ribbon ribguide"></div>
+  </div>
+
   <div class="tlwrap">
     <div class="tlhead"><span id="elapsed">00:00</span><span id="total">/ 00:00</span></div>
     <div id="zoneList" class="zonelist"></div>
   </div>
 
   <div class="ribwrap">
-    <div class="ribhead"><span><b>Aderência ao alvo</b> · cima = gabarito · baixo = você</span></div>
-    <div class="riblegend">Cor = a <b>zona</b> em que você ficou. A fita de cima é o <b>gabarito</b> (o que o treino pediu); embaixo, o que você fez. Quanto mais parecidas, mais você cumpriu.</div>
-    <div id="ribGuide" class="ribbon ribguide"></div>
+    <div class="ribhead"><span><b>O que você fez</b> (aderência ao gabarito)</span></div>
+    <div class="riblegend">Cor = a <b>zona</b> em que você ficou. Comparada com o gabarito acima — quanto mais parecidas, mais você cumpriu.</div>
     <div id="ribbon" class="ribbon"></div>
     <div class="riblegend" id="ribScore">Cumprido: —</div>
   </div>
@@ -226,6 +233,7 @@
     <button id="btnPause" class="pause" disabled>⏸ Pausar</button>
     <button id="btnFinish" class="stop" disabled>⏹ Finalizar</button>
   </div>
+  <button id="btnSkip" class="gray" style="width:100%;margin-top:8px;" disabled>⏭ Pular fase (o tempo pulado é descartado)</button>
 
   <div id="cliques" style="display:none;">
     <div class="card2"><div class="q">Esforço — o quão duro foi? (1 fácil → 10 máximo)</div>
@@ -491,8 +499,11 @@ let WORKOUT = FALLBACK_WORKOUT;
 function blkSec(b){ return b.dur_s!=null ? b.dur_s : (b.min||0)*60; }
 function fmtDur(s){ const m=Math.floor(s/60), x=s%60; return m ? (x? m+"′"+String(x).padStart(2,"0")+"″" : m+"′") : x+"″"; }
 let TOTAL_SEC, RIB_STEP, RIB_N, RIB_BLOCKSTART, RIB_TARGET;
+let maxAlvoDia=0, scaleTopo=0;   // escala "Potência vs alvo": base 1.5× maior alvo do dia; cresce se a potência real estourar
 function recomputeWorkoutDerived(){
   TOTAL_SEC = WORKOUT.blocks.reduce((s,b)=>s+blkSec(b),0);
+  maxAlvoDia = Math.max(...WORKOUT.blocks.map(b=>(b.power&&b.power[1])||0), 1);   // maior potência-alvo programada do dia
+  scaleTopo  = maxAlvoDia * 1.5;   // 50% acima do maior alvo do dia
   RIB_STEP  = TOTAL_SEC > 2400 ? 10 : 5;
   RIB_N     = Math.ceil(TOTAL_SEC / RIB_STEP);
   RIB_BLOCKSTART = (()=>{ const set=new Set(); let acc=0;
@@ -598,6 +609,8 @@ function paintRibbon(){
     cell.classList.toggle('cur', elapsed>=sStart && elapsed<sEnd);
   }
   const sc=$("ribScore"); if(sc) sc.textContent = cnt? `Cumprido: ${Math.round(pts/cnt*100)}% do treino proposto` : "Cumprido: —";
+  // marca a posição atual no GABARITO (fases) — usuário vê onde está e a próxima fase pela cor
+  const g=$("ribGuide"); if(g && g.children.length){ const gi=Math.min(g.children.length-1, Math.floor(elapsed/RIB_STEP)); for(let s=0;s<g.children.length;s++) g.children[s].classList.toggle('cur', s===gi); }
 }
 
 /* ===================== SOM (destravado no Iniciar) ===================== */
@@ -639,15 +652,20 @@ function tickUpdate(){
   $("hr-tgt").textContent  = b.hr  ? ("alvo "+b.hr[0]+"–"+b.hr[1]) : "sem alvo de FC";
   $("pw-tgt").textContent  = "alvo "+b.power[0]+"–"+b.power[1]+"W";
   $("cad-tgt").textContent = b.cad ? ("alvo "+b.cad[0]+"–"+b.cad[1]) : "livre";
-  // barra de FTP: faixa-alvo do bloco + cursor da potência atual (escala 0..FTP_APP*1.5)
-  const SCALE = FTP_APP * 1.5;
+  // barra Potência vs alvo: escala = 1.5× maior alvo do dia; se a potência real passar do topo, a escala CRESCE e o cursor pisca (HIIT não tem teto)
+  const baseTopo = maxAlvoDia * 1.5;
+  if (power != null && power > scaleTopo) scaleTopo = power * 1.04;   // cresce p/ caber o pico (não encolhe no meio do treino)
+  const SCALE = scaleTopo || (FTP_APP * 1.5);
   const z0 = Math.min(100, b.power[0] / SCALE * 100), z1 = Math.min(100, b.power[1] / SCALE * 100);
   $("ftpzone").style.left = z0 + "%";
   $("ftpzone").style.width = Math.max(0, z1 - z0) + "%";
+  const _cur = $("ftpcursor");
   if (power != null) {
-    $("ftpcursor").style.left = Math.min(100, power / SCALE * 100) + "%";
+    _cur.style.left = Math.min(100, power / SCALE * 100) + "%";
+    _cur.classList.toggle('estouro', power > baseTopo);   // passou de 1.5× o maior alvo do dia -> pisca dourado
     $("ftplab").textContent = Math.round(power / FTP_APP * 100) + "% FTP · " + power + "W";
   } else {
+    _cur.classList.remove('estouro');
     $("ftplab").textContent = "— % FTP";
   }
   // semáforo: FC E watts dentro da faixa. Z6/Z7 (b.hr null) -> só watts manda.
@@ -690,12 +708,12 @@ function tickUpdate(){
 $("btnStart").onclick=()=>{
   if(running) return;
   unlockAudio(); requestWakeLock();
-  running=true; paused=false; elapsed=0; samples.length=0; ribAgg.length=0; lastZone=null; lastDataElapsed=-1; sessionData=null;
+  running=true; paused=false; elapsed=0; samples.length=0; ribAgg.length=0; lastZone=null; lastDataElapsed=-1; sessionData=null; scaleTopo=maxAlvoDia*1.5;
   lastCR=lastCT=lastCCR=lastCCT=null; // zera deltas de cadência: bike conectada entre 2 treinos não gera RPM absurdo no 1º sample
   buildRibbon();
   $("resumo").style.display="none";
   $("cliques").style.display="none";
-  $("btnStart").disabled=true; $("btnPause").disabled=false; $("btnFinish").disabled=false;
+  $("btnStart").disabled=true; $("btnPause").disabled=false; $("btnFinish").disabled=false; $("btnSkip").disabled=false;
   $("btnStart").textContent="▶ Rodando";
   log("Treino iniciado.");
   tickUpdate(); startTick();
@@ -706,11 +724,20 @@ $("btnPause").onclick=()=>{
   log(paused?"Pausado.":"Retomado.");
 };
 $("btnFinish").onclick=()=>finish();
+$("btnSkip").onclick=()=>{
+  if(!running) return;
+  const {remSec}=currentBlock();
+  elapsed += remSec;                               // tempo pulado = morto; salta pro próximo bloco (treino encurta)
+  if(lastDataElapsed>=0) lastDataElapsed=elapsed;  // o salto não pode disparar o auto-save por inatividade
+  log("Fase pulada — "+fmt(remSec)+" descartados.");
+  if(elapsed>=TOTAL_SEC){ tickUpdate(); finish(); return; }   // pulou a última faixa -> finaliza
+  tickUpdate();
+};
 function finish(){
   if(!running) return;
   running=false; clearInterval(tickTimer); releaseWakeLock();
   $("btnStart").disabled=false; $("btnStart").textContent="▶ Iniciar";
-  $("btnPause").disabled=true; $("btnPause").textContent="⏸ Pausar"; $("btnFinish").disabled=true;
+  $("btnPause").disabled=true; $("btnPause").textContent="⏸ Pausar"; $("btnFinish").disabled=true; $("btnSkip").disabled=true;
   $("status").className=""; $("st-msg").textContent="Treino finalizado"; $("st-blk").textContent="—"; $("st-rest").textContent="";
   log("Treino finalizado em "+fmt(elapsed)+".");
   paintRibbon();
