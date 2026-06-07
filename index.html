@@ -227,6 +227,7 @@
   <div id="polarwrap" class="balwrap" style="display:none;">
     <div class="balhead"><span>Pedalada (força × ângulo)</span><span id="polarTxt" class="mut"></span></div>
     <svg id="polarSvg" class="balsvg" viewBox="0 0 140 140" width="100%" preserveAspectRatio="xMidYMid meet" style="height:280px;"></svg>
+    <div class="mut" style="font-size:11px;text-align:center;margin-top:2px;opacity:.85;line-height:1.35;">Isto mede sua <b>técnica</b>, não garante mais potência — não resista na subida (puxar é mito).</div>
   </div>
   <div class="controls row2" style="margin-top:8px;">
     <button id="btnStart" class="go">▶ Iniciar</button>
@@ -964,7 +965,19 @@ function renderBalance(){
    10 sub-frames × ~8 pts = ~79 pts/volta (360°). 2 lóbulos = 2 pernas. Ideal = "infinito sem o centro tocar".
    Calibração: ver docs/ble/wattbike-curva-pedal-CALIBRACAO.md. PENDENTE domingo: separar/rotular L-D, escala em watts. */
 let curveSub={}, curve79=[];
-const POLAR_IDEAL=0.55;   // limiar de "pedalada redonda" (força ponto-morto ÷ pico) p/ os lóbulos ficarem VERDES; ajustar vendo os valores reais
+const POLAR_IDEAL=0.55;   // limiar BASE de "redondeza" (força ponto-morto ÷ pico) p/ os lóbulos ficarem VERDES; ajustar vendo os valores reais
+// Limiar do "técnico" (verde) VARIA pela zona-alvo da fase: a efetividade da pedalada sobe com a intensidade
+// (Bini et al. 2013, Fig 5 — pico de força efetiva ~20% maior a 100% vs 75% PO_max). Em zona leve é normal
+// pedalar menos "cheio" → exige menos; em zona forte → exige mais. HEURÍSTICA de UI ajustável (calibrar c/ dados reais),
+// NÃO é corte científico de IE. Índices Z1..Z7:
+const POLAR_ZONA_FATOR=[0.75,0.85,0.95,1.00,1.05,1.05,1.00];
+/* FONTES (base do desenho da Polar View / critério técnico):
+   - Bini RR, Hume P, Croft J, Kilding A (2013). Pedal force effectiveness in Cycling: a review of constraints and
+     training effects. J Sci Cycling 1(2):11-24. → IE=∫força efetiva/∫força resultante (LaFortune & Cavanagh 1983);
+     pico de força efetiva ~90° (Coyle 1991); pontos mortos 0°/180°; efetividade ↑ com a carga (Fig 5);
+     puxar na recuperação PIORA economia (Mornieux 2008/2012) e melhorar IE NÃO melhora performance (Korff 2007).
+   - Candotti et al. (2007): IE cai ~30% quando a cadência vai de 60→105 rpm → limiar afrouxa em cadência alta.
+   - Tese Candotti (UFRGS 2003): faixa de referência de IE (bom ~0,60 / ruim 0,10–0,20). */
 async function subWattbikeCurve(srv){
   const svc=await srv.getPrimaryService('f7461223-d7c1-11e4-9ab1-0002a5d5c51b');
   const ch=await svc.getCharacteristic('f7461224-d7c1-11e4-9ab1-0002a5d5c51b');
@@ -1029,19 +1042,32 @@ function renderPolar(){
   const lobe=(seg,lado,vsign)=>{ const L=seg.length, M=72;
     const fv=k=>c[seg[Math.max(0,Math.min(L-1,k))]];
     const cr=(a,b,cc,d,t)=>{ const t2=t*t,t3=t2*t; return 0.5*(2*b+(-a+cc)*t+(2*a-5*b+4*cc-d)*t2+(-a+3*b-3*cc+d)*t3); };
+    // ANCORA o PICO de força em 90° (Bini 2013/Coyle 1991: pico ~90°, meio da descida). Desacopla ÂNGULO de ÍNDICE:
+    // antes o θ andava linear com o índice → o lóbulo DIREITO (pico em índice descentralizado ~idx77) caía em ~149°
+    // e ficava esticado pra cima. Agora a 1ª metade do segmento (vale→pico) ocupa 0..90° e a 2ª (pico→vale) 90..180°.
+    let pk=1; for(let k=1;k<L-1;k++) if(fv(k)>fv(pk)) pk=k; pk=Math.max(1,Math.min(L-2,pk));
     let p="";
-    for(let m=0;m<M;m++){ const g=m/(M-1)*(L-1), j=Math.floor(g), f=g-j;
-      const val=cr(fv(j-1),fv(j),fv(j+1),fv(j+2),f), th=(m/(M-1))*Math.PI, r=r0+((val-mn)/span)*gain;
+    for(let m=0;m<M;m++){ const th=(m/(M-1))*Math.PI;
+      const g = th<=Math.PI/2 ? (th/(Math.PI/2))*pk : pk + ((th-Math.PI/2)/(Math.PI/2))*((L-1)-pk);
+      const j=Math.floor(g), f=g-j;
+      const val=cr(fv(j-1),fv(j),fv(j+1),fv(j+2),f), r=r0+((val-mn)/span)*gain;
       p+=`${(cx+lado*r*Math.sin(th)).toFixed(1)},${(cy-vsign*r*Math.cos(th)).toFixed(1)} `; }
     return p.trim(); };
-  // "ideal" = pedalada redonda: força no ponto morto ÷ pico. Alto = puxa na subida, não só empurra.
-  const redondeza = mx? mn/mx : 0, ideal = redondeza >= POLAR_IDEAL;
-  const cE = ideal?"#2ea043":"#58a6ff", cD = ideal?"#2ea043":"#c96442";   // ambos VERDES quando ideal (gabarito)
+  // "redondeza" = força no ponto morto ÷ pico = quão CHEIA é a curva (proxy de TÉCNICA, não de potência).
+  const redondeza = mx? mn/mx : 0;
+  // limiar do "técnico" (verde) varia pela ZONA-alvo da fase (Bini 2013 Fig 5) e pela CADÊNCIA (Candotti 2007).
+  const tzNow = (typeof running!=="undefined" && running && Array.isArray(RIB_TARGET)) ? (RIB_TARGET[Math.floor(elapsed/RIB_STEP)] ?? -1) : -1;
+  const fZona = (tzNow>=0 && POLAR_ZONA_FATOR[tzNow]!=null) ? POLAR_ZONA_FATOR[tzNow] : 1;
+  const fCad  = (cad!=null && cad>30) ? Math.max(0.7, Math.min(1.15, 1 - 0.0067*(cad-70))) : 1; // cad alta desredonda → afrouxa
+  const limiar = Math.max(0.30, Math.min(0.75, POLAR_IDEAL*fZona*fCad));
+  const tecnico = redondeza >= limiar;
+  const cE = tecnico?"#2ea043":"#58a6ff", cD = tecnico?"#2ea043":"#c96442";   // VERDE quando técnico p/ a zona atual
   $("polarSvg").innerHTML = chassi +
     `<polygon points="${lobe(esq,-1,1)}" fill="${cE}26" stroke="${cE}" stroke-width="2"/>`+
     `<polygon points="${lobe(dir,1,-1)}" fill="${cD}26" stroke="${cD}" stroke-width="2"/>`;
   const L=(balL!=null)?Math.round(balL):null;
-  $("polarTxt").innerHTML = (L!=null? `E ${L}% · D ${100-L}% · ` : "") + `redondo ${Math.round(redondeza*100)}%${ideal?" ✓ ideal":""}`;
+  const zTxt = tzNow>=0 ? ` p/ ${ZONES[tzNow].k}` : "";
+  $("polarTxt").innerHTML = (L!=null? `E ${L}% · D ${100-L}% · ` : "") + `redondo ${Math.round(redondeza*100)}% (meta ${Math.round(limiar*100)}%${zTxt})${tecnico?" ✓ técnico":""}`;
 }
 
 /* ===================== HISTÓRICO ===================== */
