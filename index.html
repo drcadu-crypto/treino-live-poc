@@ -120,6 +120,28 @@
   .tcard .resumo{ color:var(--mut); font-size:12px; margin:6px 0; }
   .tfita{ display:flex; height:14px; border-radius:7px; overflow:hidden; margin:6px 0; }
   .tfita i{ display:block; height:100%; }
+  .hrow{ display:flex; align-items:center; gap:8px; padding:8px 4px; border-bottom:1px solid var(--bord); }
+  .hrow .ic{ font-size:18px; width:22px; text-align:center; flex:0 0 auto; }
+  .hrow .mid{ flex:1 1 auto; min-width:0; }
+  .hrow .nm{ font-weight:600; font-size:13px; }
+  .hrow .sub{ font-size:11px; color:var(--mut); }
+  .hrow .hfita{ display:flex; height:8px; border-radius:5px; overflow:hidden; margin-top:4px; background:var(--rib-none); }
+  .hrow .hfita i{ display:block; height:100%; }
+  .hrow .rt{ flex:0 0 auto; text-align:right; font-size:12px; }
+  .hrow .rt .tss{ font-weight:600; }
+  .chip{ display:inline-block; padding:1px 7px; border-radius:10px; font-size:11px; font-weight:600; margin-top:3px; }
+  .chip.ok{ background:rgba(46,160,67,.2); color:#3fcf6b; }
+  .chip.mid{ background:rgba(176,141,58,.22); color:#d8b24a; }
+  .chip.low{ background:rgba(229,72,77,.18); color:#ef6a6e; }
+  .hgrp{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--mut); margin:14px 0 4px; }
+  .htopo{ margin-bottom:10px; }
+  .htop-cards{ display:grid; grid-template-columns:repeat(4,1fr); gap:6px; }
+  .hcard{ background:#0f1318; border:1px solid var(--bord); border-radius:10px; padding:8px; text-align:center; }
+  .hcard .lab{ font-size:10px; color:var(--mut); text-transform:uppercase; letter-spacing:.03em; }
+  .hcard .big{ font-size:18px; font-weight:700; }
+  .hcard.form.fresh .big{ color:var(--verde); } .hcard.form.tired .big{ color:var(--amar); } .hcard.form.risk .big{ color:var(--verm); }
+  .ia-line{ margin-top:8px; padding:8px 10px; background:rgba(201,100,66,.10); border-left:3px solid #c96442; border-radius:6px; font-size:12px; line-height:1.4; }
+  .ia-line::before{ content:"✦ "; color:#c96442; }
   .tcard .acts{ display:flex; gap:8px; margin-top:8px; }
   .tcard .acts button{ flex:1; padding:8px; border-radius:10px; border:1px solid var(--bord); background:#161b22; color:var(--txt); font-weight:700; }
   .tcard .acts .go{ background:var(--azul); border-color:var(--azul); }
@@ -246,7 +268,16 @@
   </section>
 
   <section id="viewHist" style="display:none;">
-    <div class="formbig"><div class="lab">Forma (Form) hoje</div><div id="formNum" class="num">—</div><div id="formMsg" class="mut"></div></div>
+    <div id="histTopo" class="htopo">
+      <div class="htop-cards">
+        <div class="hcard"><div class="lab">Treinos</div><div id="wkN" class="big">—</div></div>
+        <div class="hcard"><div class="lab">Tempo</div><div id="wkT" class="big">—</div></div>
+        <div class="hcard"><div class="lab">Carga</div><div id="wkC" class="big">—</div></div>
+        <div class="hcard form"><div class="lab">Forma (TSB)</div><div id="formNum" class="big">—</div><div id="formMsg" class="mut"></div></div>
+      </div>
+      <div id="wkSpark"></div>
+      <div id="wkIA" class="ia-line">—</div>
+    </div>
     <div id="histGraph"></div>
     <h3 style="font-size:14px;margin:14px 0 6px;">Treinos</h3>
     <div id="histList" class="mut">carregando…</div>
@@ -917,6 +948,7 @@ async function loadHistory(force){
     if(!r.ok){ $("histList").textContent = "erro "+r.status; return; }
     const data = await r.json();
     renderForm(data.pmc);
+    renderTopo(data);
     renderList(data.sessions);
     renderGraph(data.pmc);
     histLoaded = true;
@@ -935,6 +967,28 @@ function renderForm(pmc){
   else { box.classList.add("risk"); msg="risco — recuperar"; }
   $("formMsg").textContent = msg + " (Coggan/Friel, adaptado)";
 }
+function fmtHoras(seg){ const m=Math.round((seg||0)/60), h=(m/60|0), mm=m%60; return h? `${h}h${String(mm).padStart(2,"0")}` : `${mm}min`; }
+function renderTopo(data){
+  const w = data.semana || {n_treinos:0, tempo_s:0, carga:0};
+  $("wkN").textContent = w.n_treinos;
+  $("wkT").textContent = fmtHoras(w.tempo_s);
+  $("wkC").textContent = Math.round(w.carga||0);
+  $("wkIA").textContent = data.leitura_semana || "—";
+  renderSpark(data.pmc);
+}
+function renderSpark(pmc){
+  const host=$("wkSpark"); if(!host) return;
+  if(!pmc || pmc.length<2){ host.innerHTML=""; return; }
+  const tail = pmc.slice(-14).map(p=>p.form);
+  const W=300,H=34,pad=3, lo=Math.min(...tail), hi=Math.max(...tail), rng=(hi-lo)||1;
+  const x=i=>pad+i*(W-2*pad)/(tail.length-1), y=v=>H-pad-((v-lo)/rng)*(H-2*pad);
+  const pts=tail.map((v,i)=>x(i)+","+y(v).toFixed(1)).join(" ");
+  const zeroY = (lo<=0&&hi>=0)? y(0).toFixed(1) : null;
+  host.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" style="margin-top:6px;">
+    ${zeroY!=null?`<line x1="${pad}" y1="${zeroY}" x2="${W-pad}" y2="${zeroY}" stroke="#2a313c" stroke-dasharray="3 3"/>`:""}
+    <polyline fill="none" stroke="#ffb02e" stroke-width="2" points="${pts}"/>
+  </svg><div class="mut" style="font-size:10px;">Forma (TSB) — últimos ${tail.length} dias</div>`;
+}
 function seloFonte(s){
   const f = (s.fontes && s.fontes[0]) || "app";
   const ic = f==="manual" ? "✍️ manual" : (f==="garmin" ? "⌚ Garmin" : "📱 app");
@@ -943,19 +997,71 @@ function seloFonte(s){
           : s.metodo_tss==="rpe" ? "estimada" : null;
   return m ? `${ic}·${m}` : ic;
 }
+// rótulo do grupo de um treino, relativo a `hoje` (YYYY-MM-DD). Semana = segunda→domingo.
+function periodoLabel(dstr, hoje){
+  if(!dstr) return "Sem data";
+  const d=new Date(dstr+"T12:00:00"), t=new Date(hoje+"T12:00:00");
+  const seg=new Date(t); seg.setDate(t.getDate()-((t.getDay()+6)%7)); // segunda desta semana
+  const segPrev=new Date(seg); segPrev.setDate(seg.getDate()-7);
+  if(d>=seg) return "Esta semana";
+  if(d>=segPrev) return "Semana passada";
+  const lbl=d.toLocaleDateString("pt-BR",{month:"long",year:"numeric"});
+  return lbl.charAt(0).toUpperCase()+lbl.slice(1);
+}
+function iconModalidade(s){
+  const e = ((s.esporte||"") + " " + ((s.fontes&&s.fontes[0])||"")).toLowerCase();
+  if(/forc|strength|musc/.test(e)) return "🏋️";
+  if(/run|corr/.test(e)) return "🏃";
+  return "🚴"; // bike / indoor_cycling / default
+}
+function miniFita(zonas){
+  if(!zonas) return "";
+  const tot = zonas.reduce((a,b)=>a+b,0);
+  if(tot<=0) return "";
+  return zonas.map((sec,i)=> sec>0
+    ? `<i style="background:${ZONES[i].cor};width:${(sec/tot*100).toFixed(2)}%"></i>` : "").join("");
+}
+function seloAlvo(p){
+  if(p==null) return "";
+  const cls = p>=80 ? "ok" : (p>=50 ? "mid" : "low");
+  return `<span class="chip ${cls}">${p}% no alvo</span>`;
+}
 function renderList(sessions){
   if(!sessions || !sessions.length){ $("histList").textContent="nenhum treino ainda"; return; }
   const fmtMin = s => Math.round((s||0)/60)+"min";
-  $("histList").innerHTML = sessions.slice().reverse().map(s=>{
+  const linha = s => {
     const titulo = s.nome || s.esporte || "treino";
-    const left = `${s.data_local||""} · ${titulo} · ${fmtMin(s.duracao_s)} · ${seloFonte(s)}`;
-    if(s.pontuada===false || s.carga_tss==null){ // não-pontuada (sem sensor) -> sinaliza, não conta no PMC
-      return `<div class="histrow"><span>${left}</span><span class="tss" style="color:var(--mut);font-weight:400;">sem carga ⚠︎</span></div>`;
+    const fita = miniFita(s.zonas_s);
+    const fitaHtml = fita ? `<div class="hfita">${fita}</div>` : "";
+    let rt;
+    if(s.pontuada===false || s.carga_tss==null){
+      rt = `<span class="tss" style="color:var(--mut);font-weight:400;">sem carga ⚠︎</span>`;
+    } else {
+      const tag = s.metodo_tss==="fc_lthr" ? "hrTSS" : (s.metodo_tss==="potencia" ? "TSS" : "");
+      rt = `<div class="tss">${Math.round(s.carga_tss)} ${tag}</div>${seloAlvo(s.aderencia_pct)}`;
     }
-    const tag = s.metodo_tss==="fc_lthr" ? "hrTSS" : (s.metodo_tss==="potencia" ? "TSS" : "—");
-    const ader = (s.aderencia_pct!=null) ? ` · ${s.aderencia_pct}% cumprido` : "";
-    return `<div class="histrow"><span>${left}</span><span class="tss">${Math.round(s.carga_tss)} ${tag}${ader}</span></div>`;
-  }).join("");
+    return `<div class="hrow">
+      <div class="ic">${iconModalidade(s)}</div>
+      <div class="mid">
+        <div class="nm">${titulo}</div>
+        <div class="sub">${s.data_local||""} · ${fmtMin(s.duracao_s)} · ${seloFonte(s)}</div>
+        ${fitaHtml}
+      </div>
+      <div class="rt">${rt}</div>
+    </div>`;
+  };
+  const hoje = new Date().toISOString().slice(0,10);
+  const ord = sessions.slice().reverse();
+  const grupos = [];
+  for(const s of ord){
+    const lbl = periodoLabel(s.data_local, hoje);
+    let g = grupos.find(x=>x.lbl===lbl);
+    if(!g){ g={lbl, itens:[]}; grupos.push(g); }
+    g.itens.push(s);
+  }
+  $("histList").innerHTML = grupos.map(g =>
+    `<div class="hgrp">${g.lbl}</div>` + g.itens.map(linha).join("")
+  ).join("");
 }
 function renderGraph(pmc){
   const host = $("histGraph");
